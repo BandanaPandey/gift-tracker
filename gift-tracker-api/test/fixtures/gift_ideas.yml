@@ -1,17 +1,15 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
-
 one:
   person: one
-  title: MyString
-  url: MyString
-  price_cents: 1
-  notes: MyText
-  status: MyString
+  title: Ceramic planter set
+  url: https://example.com/planter-set
+  price_cents: 4500
+  notes: Matches her balcony plants
+  status: idea
 
 two:
   person: two
-  title: MyString
-  url: MyString
-  price_cents: 1
-  notes: MyText
-  status: MyString
+  title: Espresso tasting kit
+  url: https://example.com/espresso-kit
+  price_cents: 6800
+  notes: Great for weekend coffee experiments
+  status: bought

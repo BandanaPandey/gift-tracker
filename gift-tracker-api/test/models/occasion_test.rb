@@ -1,7 +1,48 @@
 require "test_helper"
 
 class OccasionTest < ActiveSupport::TestCase
-  # test "the truth" do
-  #   assert true
-  # end
+  test "is valid with fixture data" do
+    assert occasions(:one).valid?
+  end
+
+  test "requires an allowed kind" do
+    occasion = Occasion.new(
+      person: people(:one),
+      kind: "graduation",
+      title: "Graduation party",
+      date: Date.new(2099, 5, 1)
+    )
+
+    assert_not occasion.valid?
+    assert_includes occasion.errors[:kind], "is not included in the list"
+  end
+
+  test "upcoming scope only returns future occasions ordered by date" do
+    past_occasion = Occasion.create!(
+      person: people(:one),
+      kind: "custom",
+      title: "Past occasion",
+      date: Date.current - 2.days,
+      recurring_yearly: false
+    )
+    later_occasion = Occasion.create!(
+      person: people(:one),
+      kind: "custom",
+      title: "Later occasion",
+      date: Date.current + 5.days,
+      recurring_yearly: false
+    )
+    sooner_occasion = Occasion.create!(
+      person: people(:two),
+      kind: "custom",
+      title: "Sooner occasion",
+      date: Date.current + 1.day,
+      recurring_yearly: false
+    )
+
+    results = Occasion.upcoming.to_a
+
+    assert_not_includes results, past_occasion
+    assert_equal [sooner_occasion, later_occasion], results.first(2)
+  end
 end

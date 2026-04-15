@@ -1,13 +1,11 @@
-# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
-
 one:
-  name: MyString
-  relationship: MyString
-  notes: MyText
-  interests: MyText
+  name: Alex Johnson
+  relationship: Sister
+  notes: Loves handmade gifts
+  interests: Stationery, baking, plants
 
 two:
-  name: MyString
-  relationship: MyString
-  notes: MyText
-  interests: MyText
+  name: Marcus Chen
+  relationship: Friend
+  notes: Collects board games
+  interests: Coffee, travel, photography

@@ -1,7 +1,24 @@
 require "test_helper"
 
 class PersonTest < ActiveSupport::TestCase
-  # test "the truth" do
-  #   assert true
-  # end
+  test "is valid with fixture data" do
+    assert people(:one).valid?
+  end
+
+  test "requires a name" do
+    person = Person.new(relationship: "Friend")
+
+    assert_not person.valid?
+    assert_includes person.errors[:name], "can't be blank"
+  end
+
+  test "destroys dependent occasions and gift ideas" do
+    person = people(:one)
+
+    assert_difference("Occasion.count", -1) do
+      assert_difference("GiftIdea.count", -1) do
+        person.destroy
+      end
+    end
+  end
 end
