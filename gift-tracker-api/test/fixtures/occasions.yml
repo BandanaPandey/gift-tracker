@@ -1,0 +1,15 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  person: one
+  kind: MyString
+  title: MyString
+  date: 2026-04-15
+  recurring_yearly: false
+
+two:
+  person: two
+  kind: MyString
+  title: MyString
+  date: 2026-04-15
+  recurring_yearly: false
