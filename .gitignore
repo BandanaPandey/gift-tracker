@@ -1,0 +1,6 @@
+.DS_Store
+.env
+.env.local
+
+gift-tracker-api/.env
+gift-tracker-web/.env.local
