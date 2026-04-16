@@ -40,6 +40,23 @@ export type CreatePersonInput = {
   notes: string;
 };
 
+export type CreateOccasionInput = {
+  person_id: number;
+  kind: string;
+  title: string;
+  date: string;
+  recurring_yearly: boolean;
+};
+
+export type CreateGiftIdeaInput = {
+  person_id: number;
+  title: string;
+  url: string;
+  price_cents: number | null;
+  notes: string;
+  status: string;
+};
+
 export function getApiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 }
@@ -86,4 +103,32 @@ export async function createPerson(input: CreatePersonInput) {
       person: input,
     }),
   }).then((response) => parseJson<Person>(response));
+}
+
+export async function createOccasion(input: CreateOccasionInput) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/occasions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      occasion: input,
+    }),
+  }).then((response) => parseJson<Occasion>(response));
+}
+
+export async function createGiftIdea(input: CreateGiftIdeaInput) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/gift_ideas`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      gift_idea: input,
+    }),
+  }).then((response) => parseJson<GiftIdea>(response));
 }

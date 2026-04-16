@@ -2,9 +2,13 @@
 
 import { FormEvent, useEffect, useState, useTransition } from "react";
 import {
+  createGiftIdea,
+  createOccasion,
   createPerson,
   fetchDashboardData,
   getApiBaseUrl,
+  type CreateGiftIdeaInput,
+  type CreateOccasionInput,
   type CreatePersonInput,
   type DashboardData,
   type Occasion,
@@ -17,6 +21,38 @@ const emptyPersonForm: CreatePersonInput = {
   interests: "",
   notes: "",
 };
+
+const emptyOccasionForm: CreateOccasionInput = {
+  person_id: 0,
+  kind: "birthday",
+  title: "",
+  date: "",
+  recurring_yearly: true,
+};
+
+const emptyGiftIdeaForm: CreateGiftIdeaInput = {
+  person_id: 0,
+  title: "",
+  url: "",
+  price_cents: null,
+  notes: "",
+  status: "idea",
+};
+
+const occasionKinds = [
+  { value: "birthday", label: "Birthday" },
+  { value: "anniversary", label: "Anniversary" },
+  { value: "holiday", label: "Holiday" },
+  { value: "custom", label: "Custom" },
+];
+
+const giftIdeaStatuses = [
+  { value: "idea", label: "Idea" },
+  { value: "considering", label: "Considering" },
+  { value: "bought", label: "Bought" },
+  { value: "given", label: "Given" },
+  { value: "archived", label: "Archived" },
+];
 
 function formatOccasionDate(date: string) {
   return new Intl.DateTimeFormat("en", {
@@ -56,7 +92,13 @@ export function DashboardShell() {
   const [error, setError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [occasionError, setOccasionError] = useState<string | null>(null);
+  const [occasionSuccess, setOccasionSuccess] = useState<string | null>(null);
+  const [giftIdeaError, setGiftIdeaError] = useState<string | null>(null);
+  const [giftIdeaSuccess, setGiftIdeaSuccess] = useState<string | null>(null);
   const [formState, setFormState] = useState<CreatePersonInput>(emptyPersonForm);
+  const [occasionForm, setOccasionForm] = useState<CreateOccasionInput>(emptyOccasionForm);
+  const [giftIdeaForm, setGiftIdeaForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
   const [isPending, startTransition] = useTransition();
 
   const apiBaseUrl = getApiBaseUrl();
@@ -72,6 +114,23 @@ export function DashboardShell() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (dashboard.people.length === 0) {
+      setOccasionForm(emptyOccasionForm);
+      setGiftIdeaForm(emptyGiftIdeaForm);
+      return;
+    }
+
+    setOccasionForm((current) => ({
+      ...current,
+      person_id: current.person_id || dashboard.people[0].id,
+    }));
+    setGiftIdeaForm((current) => ({
+      ...current,
+      person_id: current.person_id || dashboard.people[0].id,
+    }));
+  }, [dashboard.people]);
 
   useEffect(() => {
     void loadDashboard();
@@ -91,6 +150,50 @@ export function DashboardShell() {
       } catch (submitErr) {
         setSubmitError(
           submitErr instanceof Error ? submitErr.message : "Unable to add person right now.",
+        );
+      }
+    });
+  }
+
+  function handleOccasionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setOccasionError(null);
+    setOccasionSuccess(null);
+
+    startTransition(async () => {
+      try {
+        await createOccasion(occasionForm);
+        setOccasionForm((current) => ({
+          ...emptyOccasionForm,
+          person_id: current.person_id,
+        }));
+        setOccasionSuccess("Occasion added to the calendar.");
+        await loadDashboard();
+      } catch (submitErr) {
+        setOccasionError(
+          submitErr instanceof Error ? submitErr.message : "Unable to add occasion right now.",
+        );
+      }
+    });
+  }
+
+  function handleGiftIdeaSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGiftIdeaError(null);
+    setGiftIdeaSuccess(null);
+
+    startTransition(async () => {
+      try {
+        await createGiftIdea(giftIdeaForm);
+        setGiftIdeaForm((current) => ({
+          ...emptyGiftIdeaForm,
+          person_id: current.person_id,
+        }));
+        setGiftIdeaSuccess("Gift idea saved.");
+        await loadDashboard();
+      } catch (submitErr) {
+        setGiftIdeaError(
+          submitErr instanceof Error ? submitErr.message : "Unable to save gift idea right now.",
         );
       }
     });
@@ -223,56 +326,214 @@ export function DashboardShell() {
             </Panel>
           </div>
 
-          <Panel
-            eyebrow="Quick add"
-            title="Add a new person"
-            description="Keep this lightweight for now. We can expand it into a full profile editor after the dashboard feels right."
-          >
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-6">
+            <Panel
+              eyebrow="Quick add"
+              title="Add a new person"
+              description="Keep this lightweight for now. We can expand it into a full profile editor after the dashboard feels right."
+            >
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Name"
+                    value={formState.name}
+                    onChange={(value) => setFormState((current) => ({ ...current, name: value }))}
+                    placeholder="Jamie Rivera"
+                    required
+                  />
+                  <Field
+                    label="Relationship"
+                    value={formState.relationship}
+                    onChange={(value) =>
+                      setFormState((current) => ({ ...current, relationship: value }))
+                    }
+                    placeholder="Friend, cousin, partner"
+                  />
+                </div>
                 <Field
-                  label="Name"
-                  value={formState.name}
-                  onChange={(value) => setFormState((current) => ({ ...current, name: value }))}
-                  placeholder="Jamie Rivera"
+                  label="Interests"
+                  value={formState.interests}
+                  onChange={(value) =>
+                    setFormState((current) => ({ ...current, interests: value }))
+                  }
+                  placeholder="Books, coffee, skincare"
+                />
+                <TextAreaField
+                  label="Notes"
+                  value={formState.notes}
+                  onChange={(value) => setFormState((current) => ({ ...current, notes: value }))}
+                  placeholder="A few hints that will help future you pick better gifts."
+                />
+
+                {submitError ? <p className="text-sm text-[#a0401f]">{submitError}</p> : null}
+                {submitSuccess ? <p className="text-sm text-[#2a6b46]">{submitSuccess}</p> : null}
+
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="inline-flex w-full items-center justify-center rounded-full bg-[#b85c38] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#9f4d2d] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPending ? "Saving person..." : "Add person"}
+                </button>
+              </form>
+            </Panel>
+
+            <Panel
+              eyebrow="Calendar"
+              title="Add an occasion"
+              description="Attach a birthday, anniversary, or custom date to someone already in your circle."
+            >
+              <form className="space-y-4" onSubmit={handleOccasionSubmit}>
+                <SelectField
+                  label="Person"
+                  value={String(occasionForm.person_id)}
+                  onChange={(value) =>
+                    setOccasionForm((current) => ({ ...current, person_id: Number(value) }))
+                  }
+                  options={dashboard.people.map((person) => ({
+                    value: String(person.id),
+                    label: person.name,
+                  }))}
+                  disabled={dashboard.people.length === 0}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SelectField
+                    label="Occasion type"
+                    value={occasionForm.kind}
+                    onChange={(value) =>
+                      setOccasionForm((current) => ({ ...current, kind: value }))
+                    }
+                    options={occasionKinds}
+                  />
+                  <Field
+                    label="Date"
+                    value={occasionForm.date}
+                    onChange={(value) =>
+                      setOccasionForm((current) => ({ ...current, date: value }))
+                    }
+                    placeholder="2099-06-10"
+                    type="date"
+                    required
+                  />
+                </div>
+                <Field
+                  label="Title"
+                  value={occasionForm.title}
+                  onChange={(value) =>
+                    setOccasionForm((current) => ({ ...current, title: value }))
+                  }
+                  placeholder="Alex Birthday"
                   required
                 />
-                <Field
-                  label="Relationship"
-                  value={formState.relationship}
+                <label className="flex items-center gap-3 rounded-2xl bg-[#f8f0e4] px-4 py-3 text-sm text-[#5f4a3a]">
+                  <input
+                    type="checkbox"
+                    checked={occasionForm.recurring_yearly}
+                    onChange={(event) =>
+                      setOccasionForm((current) => ({
+                        ...current,
+                        recurring_yearly: event.target.checked,
+                      }))
+                    }
+                  />
+                  Repeat this occasion every year
+                </label>
+
+                {occasionError ? <p className="text-sm text-[#a0401f]">{occasionError}</p> : null}
+                {occasionSuccess ? <p className="text-sm text-[#2a6b46]">{occasionSuccess}</p> : null}
+
+                <button
+                  type="submit"
+                  disabled={isPending || dashboard.people.length === 0}
+                  className="inline-flex w-full items-center justify-center rounded-full bg-[#7c4a36] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#683c2b] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPending ? "Saving occasion..." : "Add occasion"}
+                </button>
+              </form>
+            </Panel>
+
+            <Panel
+              eyebrow="Idea capture"
+              title="Save a gift idea"
+              description="Log something while it is fresh, even if you are not ready to buy it yet."
+            >
+              <form className="space-y-4" onSubmit={handleGiftIdeaSubmit}>
+                <SelectField
+                  label="Person"
+                  value={String(giftIdeaForm.person_id)}
                   onChange={(value) =>
-                    setFormState((current) => ({ ...current, relationship: value }))
+                    setGiftIdeaForm((current) => ({ ...current, person_id: Number(value) }))
                   }
-                  placeholder="Friend, cousin, partner"
+                  options={dashboard.people.map((person) => ({
+                    value: String(person.id),
+                    label: person.name,
+                  }))}
+                  disabled={dashboard.people.length === 0}
                 />
-              </div>
-              <Field
-                label="Interests"
-                value={formState.interests}
-                onChange={(value) =>
-                  setFormState((current) => ({ ...current, interests: value }))
-                }
-                placeholder="Books, coffee, skincare"
-              />
-              <TextAreaField
-                label="Notes"
-                value={formState.notes}
-                onChange={(value) => setFormState((current) => ({ ...current, notes: value }))}
-                placeholder="A few hints that will help future you pick better gifts."
-              />
+                <Field
+                  label="Idea title"
+                  value={giftIdeaForm.title}
+                  onChange={(value) =>
+                    setGiftIdeaForm((current) => ({ ...current, title: value }))
+                  }
+                  placeholder="Weekend getaway voucher"
+                  required
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SelectField
+                    label="Status"
+                    value={giftIdeaForm.status}
+                    onChange={(value) =>
+                      setGiftIdeaForm((current) => ({ ...current, status: value }))
+                    }
+                    options={giftIdeaStatuses}
+                  />
+                  <Field
+                    label="Price (USD)"
+                    value={
+                      giftIdeaForm.price_cents === null
+                        ? ""
+                        : String(giftIdeaForm.price_cents / 100)
+                    }
+                    onChange={(value) =>
+                      setGiftIdeaForm((current) => ({
+                        ...current,
+                        price_cents: value ? Math.round(Number(value) * 100) : null,
+                      }))
+                    }
+                    placeholder="120"
+                    type="number"
+                  />
+                </div>
+                <Field
+                  label="Link"
+                  value={giftIdeaForm.url}
+                  onChange={(value) => setGiftIdeaForm((current) => ({ ...current, url: value }))}
+                  placeholder="https://example.com"
+                  type="url"
+                />
+                <TextAreaField
+                  label="Notes"
+                  value={giftIdeaForm.notes}
+                  onChange={(value) =>
+                    setGiftIdeaForm((current) => ({ ...current, notes: value }))
+                  }
+                  placeholder="Why this feels like a good fit."
+                />
 
-              {submitError ? <p className="text-sm text-[#a0401f]">{submitError}</p> : null}
-              {submitSuccess ? <p className="text-sm text-[#2a6b46]">{submitSuccess}</p> : null}
+                {giftIdeaError ? <p className="text-sm text-[#a0401f]">{giftIdeaError}</p> : null}
+                {giftIdeaSuccess ? <p className="text-sm text-[#2a6b46]">{giftIdeaSuccess}</p> : null}
 
-              <button
-                type="submit"
-                disabled={isPending}
-                className="inline-flex w-full items-center justify-center rounded-full bg-[#b85c38] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#9f4d2d] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isPending ? "Saving person..." : "Add person"}
-              </button>
-            </form>
-          </Panel>
+                <button
+                  type="submit"
+                  disabled={isPending || dashboard.people.length === 0}
+                  className="inline-flex w-full items-center justify-center rounded-full bg-[#2f241d] px-5 py-3 text-sm font-semibold text-[#f8ede0] transition hover:bg-[#231912] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPending ? "Saving idea..." : "Save gift idea"}
+                </button>
+              </form>
+            </Panel>
+          </div>
         </section>
       </div>
     </main>
@@ -412,23 +673,58 @@ function Field({
   onChange,
   placeholder,
   required = false,
+  type = "text",
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   required?: boolean;
+  type?: "text" | "date" | "url" | "number";
 }) {
   return (
     <label className="grid gap-2">
       <span className="text-sm font-medium text-[#5f4a3a]">{label}</span>
       <input
+        type={type}
         required={required}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="rounded-2xl border border-[#e5d8ca] bg-[#fffdf9] px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#c97a58] focus:ring-2 focus:ring-[#f2d7c2]"
       />
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  disabled = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-[#5f4a3a]">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+        className="rounded-2xl border border-[#e5d8ca] bg-[#fffdf9] px-4 py-3 text-sm text-foreground outline-none transition focus:border-[#c97a58] focus:ring-2 focus:ring-[#f2d7c2] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
