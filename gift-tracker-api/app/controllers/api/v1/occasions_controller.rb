@@ -50,7 +50,15 @@ module Api
       end
 
       def occasion_params
-        params.require(:occasion).permit(:person_id, :kind, :title, :date, :recurring_yearly)
+        params.require(:occasion).permit(
+          :person_id,
+          :kind,
+          :title,
+          :date,
+          :recurring_yearly,
+          :reminder_days_before,
+          :reminder_enabled
+        )
       end
 
       def occasion_payload(occasion)
@@ -62,6 +70,8 @@ module Api
           title: occasion.title,
           date: occasion.date,
           recurring_yearly: occasion.recurring_yearly,
+          reminder_days_before: occasion.reminder_days_before,
+          reminder_enabled: occasion.reminder_enabled,
           created_at: occasion.created_at,
           updated_at: occasion.updated_at
         }

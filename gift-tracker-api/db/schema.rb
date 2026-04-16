@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_15_082236) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_16_071000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -33,6 +33,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_15_082236) do
     t.string "kind", null: false
     t.bigint "person_id", null: false
     t.boolean "recurring_yearly", default: true, null: false
+    t.integer "reminder_days_before", default: 14, null: false
+    t.boolean "reminder_enabled", default: true, null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
     t.index ["date"], name: "index_occasions_on_date"

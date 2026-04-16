@@ -6,6 +6,8 @@ export type Occasion = {
   title: string;
   date: string;
   recurring_yearly: boolean;
+  reminder_days_before: number;
+  reminder_enabled: boolean;
 };
 
 export type GiftIdea = {
@@ -46,6 +48,8 @@ export type CreateOccasionInput = {
   title: string;
   date: string;
   recurring_yearly: boolean;
+  reminder_days_before: number;
+  reminder_enabled: boolean;
 };
 
 export type CreateGiftIdeaInput = {

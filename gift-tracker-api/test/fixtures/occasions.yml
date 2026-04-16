@@ -4,6 +4,8 @@ one:
   title: Alex Birthday
   date: 2099-06-10
   recurring_yearly: true
+  reminder_days_before: 21
+  reminder_enabled: true
 
 two:
   person: two
@@ -11,3 +13,5 @@ two:
   title: Marcus Anniversary
   date: 2099-08-20
   recurring_yearly: true
+  reminder_days_before: 10
+  reminder_enabled: false

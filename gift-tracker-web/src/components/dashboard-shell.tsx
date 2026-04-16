@@ -28,6 +28,8 @@ const emptyOccasionForm: CreateOccasionInput = {
   title: "",
   date: "",
   recurring_yearly: true,
+  reminder_days_before: 14,
+  reminder_enabled: true,
 };
 
 const emptyGiftIdeaForm: CreateGiftIdeaInput = {
@@ -60,6 +62,14 @@ function formatOccasionDate(date: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(date));
+}
+
+function reminderLabel(occasion: Occasion) {
+  if (!occasion.reminder_enabled) {
+    return "Reminder off";
+  }
+
+  return `${occasion.reminder_days_before} day${occasion.reminder_days_before === 1 ? "" : "s"} before`;
 }
 
 function totalGiftIdeas(people: Person[]) {
@@ -425,6 +435,34 @@ export function DashboardShell() {
                   placeholder="Alex Birthday"
                   required
                 />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Reminder lead time"
+                    value={String(occasionForm.reminder_days_before)}
+                    onChange={(value) =>
+                      setOccasionForm((current) => ({
+                        ...current,
+                        reminder_days_before: Number(value || 0),
+                      }))
+                    }
+                    placeholder="14"
+                    type="number"
+                    required
+                  />
+                  <label className="flex items-center gap-3 rounded-2xl bg-[#f8f0e4] px-4 py-3 text-sm text-[#5f4a3a] sm:mt-7">
+                    <input
+                      type="checkbox"
+                      checked={occasionForm.reminder_enabled}
+                      onChange={(event) =>
+                        setOccasionForm((current) => ({
+                          ...current,
+                          reminder_enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                    Enable reminder
+                  </label>
+                </div>
                 <label className="flex items-center gap-3 rounded-2xl bg-[#f8f0e4] px-4 py-3 text-sm text-[#5f4a3a]">
                   <input
                     type="checkbox"
@@ -598,6 +636,9 @@ function OccasionCard({ occasion }: { occasion: Occasion }) {
           </p>
           <h3 className="mt-2 text-lg font-semibold">{occasion.title}</h3>
           <p className="mt-1 text-sm text-muted">{occasion.person_name}</p>
+          <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[#9f5f3e]">
+            {reminderLabel(occasion)}
+          </p>
         </div>
         <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#8b5b42]">
           {formatOccasionDate(occasion.date)}

@@ -74,6 +74,8 @@ module Api
           title: occasion.title,
           date: occasion.date,
           recurring_yearly: occasion.recurring_yearly,
+          reminder_days_before: occasion.reminder_days_before,
+          reminder_enabled: occasion.reminder_enabled,
           created_at: occasion.created_at,
           updated_at: occasion.updated_at
         }

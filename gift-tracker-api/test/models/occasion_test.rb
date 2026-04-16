@@ -17,6 +17,19 @@ class OccasionTest < ActiveSupport::TestCase
     assert_includes occasion.errors[:kind], "is not included in the list"
   end
 
+  test "requires a non-negative reminder lead time" do
+    occasion = Occasion.new(
+      person: people(:one),
+      kind: "birthday",
+      title: "Invalid reminder",
+      date: Date.new(2099, 5, 1),
+      reminder_days_before: -1
+    )
+
+    assert_not occasion.valid?
+    assert_includes occasion.errors[:reminder_days_before], "must be greater than or equal to 0"
+  end
+
   test "upcoming scope only returns future occasions ordered by date" do
     past_occasion = Occasion.create!(
       person: people(:one),
