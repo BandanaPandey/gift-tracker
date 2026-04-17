@@ -1,0 +1,11 @@
+queued_today:
+  occasion: one
+  reminder_date: 2099-05-20
+  channel: email
+  status: queued
+
+sent_yesterday:
+  occasion: two
+  reminder_date: 2099-08-10
+  channel: email
+  status: sent

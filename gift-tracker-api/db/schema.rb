@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_16_071000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_17_071000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -51,6 +51,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_16_071000) do
     t.index ["name"], name: "index_people_on_name"
   end
 
+  create_table "reminder_notifications", force: :cascade do |t|
+    t.string "channel", default: "email", null: false
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.bigint "occasion_id", null: false
+    t.date "reminder_date", null: false
+    t.datetime "sent_at"
+    t.string "status", default: "queued", null: false
+    t.datetime "updated_at", null: false
+    t.index ["occasion_id", "reminder_date", "channel"], name: "index_reminder_notifications_uniqueness", unique: true
+    t.index ["occasion_id"], name: "index_reminder_notifications_on_occasion_id"
+  end
+
   add_foreign_key "gift_ideas", "people"
   add_foreign_key "occasions", "people"
+  add_foreign_key "reminder_notifications", "occasions"
 end

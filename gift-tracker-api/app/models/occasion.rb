@@ -1,5 +1,6 @@
 class Occasion < ApplicationRecord
   belongs_to :person
+  has_many :reminder_notifications, dependent: :destroy
 
   KINDS = %w[birthday anniversary holiday custom].freeze
 

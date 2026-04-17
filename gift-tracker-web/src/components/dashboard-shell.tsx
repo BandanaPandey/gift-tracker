@@ -7,6 +7,7 @@ import {
   createPerson,
   fetchDashboardData,
   getApiBaseUrl,
+  queueReminderNotifications,
   type CreateGiftIdeaInput,
   type CreateOccasionInput,
   type CreatePersonInput,
@@ -14,6 +15,7 @@ import {
   type Occasion,
   type Person,
   type ReminderFeedItem,
+  type ReminderNotification,
 } from "@/lib/api";
 
 const emptyPersonForm: CreatePersonInput = {
@@ -99,6 +101,7 @@ export function DashboardShell() {
     people: [],
     upcomingOccasions: [],
     reminderFeed: [],
+    reminderActivity: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +111,8 @@ export function DashboardShell() {
   const [occasionSuccess, setOccasionSuccess] = useState<string | null>(null);
   const [giftIdeaError, setGiftIdeaError] = useState<string | null>(null);
   const [giftIdeaSuccess, setGiftIdeaSuccess] = useState<string | null>(null);
+  const [queueError, setQueueError] = useState<string | null>(null);
+  const [queueSuccess, setQueueSuccess] = useState<string | null>(null);
   const [formState, setFormState] = useState<CreatePersonInput>(emptyPersonForm);
   const [occasionForm, setOccasionForm] = useState<CreateOccasionInput>(emptyOccasionForm);
   const [giftIdeaForm, setGiftIdeaForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
@@ -211,6 +216,27 @@ export function DashboardShell() {
     });
   }
 
+  function handleQueueReminders() {
+    setQueueError(null);
+    setQueueSuccess(null);
+
+    startTransition(async () => {
+      try {
+        const result = await queueReminderNotifications();
+        setQueueSuccess(
+          result.queued_count > 0
+            ? `${result.queued_count} reminder notification${result.queued_count === 1 ? "" : "s"} queued.`
+            : "No reminders are due today."
+        );
+        await loadDashboard();
+      } catch (queueErr) {
+        setQueueError(
+          queueErr instanceof Error ? queueErr.message : "Unable to queue reminders right now."
+        );
+      }
+    });
+  }
+
   return (
     <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#fff7ee,_#f4ebde_48%,_#e4d4c1)] px-5 py-8 text-foreground sm:px-8 lg:px-10">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-5xl rounded-full bg-[radial-gradient(circle,_rgba(184,92,56,0.18),_transparent_72%)] blur-3xl" />
@@ -279,6 +305,15 @@ export function DashboardShell() {
                 >
                   Refresh data
                 </button>
+                <button
+                  type="button"
+                  onClick={handleQueueReminders}
+                  className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
+                >
+                  Queue today&apos;s reminders
+                </button>
+                {queueError ? <p className="text-sm text-[#f4b9a2]">{queueError}</p> : null}
+                {queueSuccess ? <p className="text-sm text-[#d4f0da]">{queueSuccess}</p> : null}
               </div>
             </div>
           </div>
@@ -312,6 +347,27 @@ export function DashboardShell() {
                 <EmptyState
                   title="No reminders due soon"
                   description="As your occasion dates get closer, this queue will show which people need your attention next."
+                />
+              )}
+            </Panel>
+
+            <Panel
+              eyebrow="Reminder log"
+              title="Recent reminder activity"
+              description="This queue shows which reminder notifications have been generated so far."
+            >
+              {loading ? (
+                <LoadingList />
+              ) : dashboard.reminderActivity.length > 0 ? (
+                <div className="grid gap-3">
+                  {dashboard.reminderActivity.map((notification) => (
+                    <ReminderActivityCard key={notification.id} notification={notification} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No reminder activity yet"
+                  description="Use the queue action to create notifications for reminders due today."
                 />
               )}
             </Panel>
@@ -754,6 +810,33 @@ function ReminderCard({ reminder }: { reminder: ReminderFeedItem }) {
         </span>
         <span className="rounded-full bg-white px-3 py-1">
           Occasion in {reminder.days_until_occurrence} day{reminder.days_until_occurrence === 1 ? "" : "s"}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function ReminderActivityCard({ notification }: { notification: ReminderNotification }) {
+  return (
+    <article className="rounded-[1.4rem] border border-black/6 bg-white p-4 shadow-[0_12px_30px_rgba(83,55,32,0.06)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            {notification.status}
+          </p>
+          <h3 className="mt-2 text-lg font-semibold">{notification.title}</h3>
+          <p className="mt-1 text-sm text-muted">{notification.person_name}</p>
+        </div>
+        <span className="rounded-full bg-[#f8f0e4] px-3 py-1 text-xs font-medium text-[#7a4e37]">
+          {notification.channel}
+        </span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#7a4e37]">
+        <span className="rounded-full bg-[#f8f0e4] px-3 py-1">
+          Reminder {formatOccasionDate(notification.reminder_date)}
+        </span>
+        <span className="rounded-full bg-[#f8f0e4] px-3 py-1">
+          Occasion {formatOccasionDate(notification.occasion_date)}
         </span>
       </div>
     </article>
