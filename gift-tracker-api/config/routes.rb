@@ -12,6 +12,7 @@ Rails.application.routes.draw do
       get "occasions/reminders", to: "occasions#reminders"
       get "reminder_notifications", to: "reminder_notifications#index"
       post "reminder_notifications/queue", to: "reminder_notifications#queue"
+      post "reminder_notifications/process", to: "reminder_notifications#process_queue"
 
       resources :people
       resources :occasions, only: %i[index create update destroy]

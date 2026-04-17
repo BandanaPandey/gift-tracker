@@ -9,6 +9,7 @@ class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
     payload = json_response
     assert_equal 2, payload.length
     assert_equal "Alex Johnson", payload.first["name"]
+    assert_equal "alex@example.com", payload.first["email"]
     assert_equal "Alex Birthday", payload.first["occasions"].first["title"]
     assert_equal "Ceramic planter set", payload.first["gift_ideas"].first["title"]
   end
@@ -25,6 +26,7 @@ class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
       post "/api/v1/people", params: {
         person: {
           name: "Priya Shah",
+          email: "priya@example.com",
           relationship: "Cousin",
           notes: "Loves self-care gifts",
           interests: "Skincare, tea"
@@ -34,6 +36,7 @@ class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
 
     assert_response :created
     assert_equal "Priya Shah", json_response["name"]
+    assert_equal "priya@example.com", json_response["email"]
   end
 
   test "returns validation errors when creating an invalid person" do

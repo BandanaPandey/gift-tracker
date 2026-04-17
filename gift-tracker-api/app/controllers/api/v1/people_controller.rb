@@ -49,13 +49,14 @@ module Api
       end
 
       def person_params
-        params.require(:person).permit(:name, :relationship, :notes, :interests)
+        params.require(:person).permit(:name, :email, :relationship, :notes, :interests)
       end
 
       def person_payload(person)
         {
           id: person.id,
           name: person.name,
+          email: person.email,
           relationship: person.relationship,
           notes: person.notes,
           interests: person.interests,

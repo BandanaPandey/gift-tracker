@@ -1,6 +1,10 @@
 require "test_helper"
 
 class ApiV1ReminderNotificationsFlowTest < ActionDispatch::IntegrationTest
+  setup do
+    ActionMailer::Base.deliveries.clear
+  end
+
   test "lists recent reminder notifications" do
     get "/api/v1/reminder_notifications"
 
@@ -38,5 +42,32 @@ class ApiV1ReminderNotificationsFlowTest < ActionDispatch::IntegrationTest
 
     assert_response :created
     assert_equal due_occasion.id, ReminderNotification.order(:created_at).last.occasion_id
+  end
+
+  test "processes queued reminders and records sent or skipped results" do
+    queue_notification = reminder_notifications(:queued_today)
+    people(:two).update!(email: nil)
+
+    skipped_notification = ReminderNotification.create!(
+      occasion: occasions(:two),
+      reminder_date: Date.current,
+      channel: "email",
+      status: "queued"
+    )
+
+    assert_difference("ActionMailer::Base.deliveries.size", 1) do
+      post "/api/v1/reminder_notifications/process", as: :json
+    end
+
+    assert_response :success
+    assert_equal 2, json_response["processed_count"]
+
+    queue_notification.reload
+    skipped_notification.reload
+
+    assert_equal "sent", queue_notification.status
+    assert_not_nil queue_notification.sent_at
+    assert_equal "skipped", skipped_notification.status
+    assert_equal "No email address set for Marcus Chen", skipped_notification.error_message
   end
 end

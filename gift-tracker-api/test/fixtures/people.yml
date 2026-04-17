@@ -1,5 +1,6 @@
 one:
   name: Alex Johnson
+  email: alex@example.com
   relationship: Sister
   notes: Loves handmade gifts
   interests: Stationery, baking, plants

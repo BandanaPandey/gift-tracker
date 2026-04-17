@@ -9,6 +9,7 @@ class ReminderNotification < ApplicationRecord
   validates :reminder_date, presence: true
 
   scope :recent_first, -> { order(created_at: :desc) }
+  scope :queued, -> { where(status: "queued") }
 
   delegate :person, to: :occasion
 end

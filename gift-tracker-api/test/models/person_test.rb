@@ -12,6 +12,15 @@ class PersonTest < ActiveSupport::TestCase
     assert_includes person.errors[:name], "can't be blank"
   end
 
+  test "allows blank email but rejects invalid email" do
+    assert people(:two).valid?
+
+    people(:one).email = "not-an-email"
+
+    assert_not people(:one).valid?
+    assert_includes people(:one).errors[:email], "is invalid"
+  end
+
   test "destroys dependent occasions and gift ideas" do
     person = people(:one)
 

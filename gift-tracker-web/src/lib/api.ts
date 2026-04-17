@@ -23,6 +23,7 @@ export type GiftIdea = {
 export type Person = {
   id: number;
   name: string;
+  email: string | null;
   relationship: string | null;
   notes: string | null;
   interests: string | null;
@@ -52,11 +53,14 @@ export type ReminderNotification = {
   reminder_date: string;
   channel: string;
   status: string;
+  sent_at: string | null;
+  error_message: string | null;
   created_at: string;
 };
 
 export type CreatePersonInput = {
   name: string;
+  email: string;
   relationship: string;
   interests: string;
   notes: string;
@@ -176,6 +180,24 @@ export async function queueReminderNotifications(targetDate?: string) {
     parseJson<{
       target_date: string;
       queued_count: number;
+      notifications: ReminderNotification[];
+    }>(response),
+  );
+}
+
+export async function processQueuedReminderNotifications() {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/reminder_notifications/process`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  }).then((response) =>
+    parseJson<{
+      processed_count: number;
+      sent_count: number;
+      skipped_count: number;
       notifications: ReminderNotification[];
     }>(response),
   );

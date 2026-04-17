@@ -7,6 +7,7 @@ import {
   createPerson,
   fetchDashboardData,
   getApiBaseUrl,
+  processQueuedReminderNotifications,
   queueReminderNotifications,
   type CreateGiftIdeaInput,
   type CreateOccasionInput,
@@ -20,6 +21,7 @@ import {
 
 const emptyPersonForm: CreatePersonInput = {
   name: "",
+  email: "",
   relationship: "",
   interests: "",
   notes: "",
@@ -113,6 +115,8 @@ export function DashboardShell() {
   const [giftIdeaSuccess, setGiftIdeaSuccess] = useState<string | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [queueSuccess, setQueueSuccess] = useState<string | null>(null);
+  const [processError, setProcessError] = useState<string | null>(null);
+  const [processSuccess, setProcessSuccess] = useState<string | null>(null);
   const [formState, setFormState] = useState<CreatePersonInput>(emptyPersonForm);
   const [occasionForm, setOccasionForm] = useState<CreateOccasionInput>(emptyOccasionForm);
   const [giftIdeaForm, setGiftIdeaForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
@@ -237,6 +241,27 @@ export function DashboardShell() {
     });
   }
 
+  function handleProcessReminders() {
+    setProcessError(null);
+    setProcessSuccess(null);
+
+    startTransition(async () => {
+      try {
+        const result = await processQueuedReminderNotifications();
+        setProcessSuccess(
+          result.processed_count > 0
+            ? `${result.sent_count} sent, ${result.skipped_count} skipped.`
+            : "No queued reminders were waiting."
+        );
+        await loadDashboard();
+      } catch (processErr) {
+        setProcessError(
+          processErr instanceof Error ? processErr.message : "Unable to process queued reminders."
+        );
+      }
+    });
+  }
+
   return (
     <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#fff7ee,_#f4ebde_48%,_#e4d4c1)] px-5 py-8 text-foreground sm:px-8 lg:px-10">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-5xl rounded-full bg-[radial-gradient(circle,_rgba(184,92,56,0.18),_transparent_72%)] blur-3xl" />
@@ -312,8 +337,17 @@ export function DashboardShell() {
                 >
                   Queue today&apos;s reminders
                 </button>
+                <button
+                  type="button"
+                  onClick={handleProcessReminders}
+                  className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
+                >
+                  Process queued reminders
+                </button>
                 {queueError ? <p className="text-sm text-[#f4b9a2]">{queueError}</p> : null}
                 {queueSuccess ? <p className="text-sm text-[#d4f0da]">{queueSuccess}</p> : null}
+                {processError ? <p className="text-sm text-[#f4b9a2]">{processError}</p> : null}
+                {processSuccess ? <p className="text-sm text-[#d4f0da]">{processSuccess}</p> : null}
               </div>
             </div>
           </div>
@@ -430,6 +464,15 @@ export function DashboardShell() {
                     placeholder="Jamie Rivera"
                     required
                   />
+                  <Field
+                    label="Email"
+                    value={formState.email}
+                    onChange={(value) => setFormState((current) => ({ ...current, email: value }))}
+                    placeholder="jamie@example.com"
+                    type="email"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
                   <Field
                     label="Relationship"
                     value={formState.relationship}
@@ -736,6 +779,7 @@ function PersonCard({ person }: { person: Person }) {
         <div>
           <h3 className="text-xl font-semibold">{person.name}</h3>
           <p className="mt-1 text-sm text-muted">{person.relationship || "Relationship not set"}</p>
+          <p className="mt-2 text-sm text-muted">{person.email || "No reminder email set"}</p>
           {person.notes ? <p className="mt-3 text-sm leading-6 text-muted">{person.notes}</p> : null}
         </div>
         <div className="grid min-w-[160px] gap-2 rounded-[1.2rem] bg-[#f8f0e4] p-3 text-sm text-[#5f4a3a]">
@@ -838,7 +882,15 @@ function ReminderActivityCard({ notification }: { notification: ReminderNotifica
         <span className="rounded-full bg-[#f8f0e4] px-3 py-1">
           Occasion {formatOccasionDate(notification.occasion_date)}
         </span>
+        {notification.sent_at ? (
+          <span className="rounded-full bg-[#f8f0e4] px-3 py-1">
+            Sent {formatOccasionDate(notification.sent_at)}
+          </span>
+        ) : null}
       </div>
+      {notification.error_message ? (
+        <p className="mt-3 text-sm text-[#a0401f]">{notification.error_message}</p>
+      ) : null}
     </article>
   );
 }
@@ -856,7 +908,7 @@ function Field({
   onChange: (value: string) => void;
   placeholder: string;
   required?: boolean;
-  type?: "text" | "date" | "url" | "number";
+  type?: "text" | "date" | "url" | "number" | "email";
 }) {
   return (
     <label className="grid gap-2">

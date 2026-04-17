@@ -20,6 +20,17 @@ module Api
         render json: { errors: ["Target date is invalid"] }, status: :unprocessable_entity
       end
 
+      def process_queue
+        notifications = ReminderNotificationProcessor.process(limit: limit)
+
+        render json: {
+          processed_count: notifications.count,
+          sent_count: notifications.count { |notification| notification.status == "sent" },
+          skipped_count: notifications.count { |notification| notification.status == "skipped" },
+          notifications: notifications.map { |notification| notification_payload(notification) }
+        }
+      end
+
       private
 
       def limit
@@ -36,6 +47,8 @@ module Api
           reminder_date: notification.reminder_date,
           channel: notification.channel,
           status: notification.status,
+          sent_at: notification.sent_at,
+          error_message: notification.error_message,
           created_at: notification.created_at
         }
       end

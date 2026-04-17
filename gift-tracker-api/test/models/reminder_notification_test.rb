@@ -16,4 +16,8 @@ class ReminderNotificationTest < ActiveSupport::TestCase
     assert_not notification.valid?
     assert_includes notification.errors[:status], "is not included in the list"
   end
+
+  test "returns only queued notifications from queued scope" do
+    assert_equal [ reminder_notifications(:queued_today) ], ReminderNotification.queued.to_a
+  end
 end

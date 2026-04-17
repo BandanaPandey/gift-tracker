@@ -1,0 +1,15 @@
+<p>Hi there,</p>
+
+<p>This is your reminder for <strong><%= @person.name %></strong>.</p>
+
+<p>
+  <strong><%= @occasion.title %></strong> is on
+  <%= @occasion.date.strftime("%B %-d, %Y") %>.
+</p>
+
+<p>
+  Your reminder was scheduled for
+  <%= @notification.reminder_date.strftime("%B %-d, %Y") %>.
+</p>
+
+<p>Take a moment to review your gift ideas and plan ahead.</p>
