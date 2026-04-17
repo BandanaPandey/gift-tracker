@@ -1,4 +1,4 @@
 class ApplicationMailer < ActionMailer::Base
-  default from: "from@example.com"
+  default from: ENV.fetch("MAILER_FROM_EMAIL", "reminders@gift-tracker.local")
   layout "mailer"
 end

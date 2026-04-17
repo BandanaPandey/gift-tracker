@@ -17,6 +17,9 @@ bin/rails db:prepare
 bin/rails server -p 3001
 ```
 
+To test reminder emails locally, keep `ACTION_MAILER_DELIVERY_METHOD=test` and use the dashboard to queue/process reminders.
+For a real SMTP provider later, set `SMTP_ADDRESS`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `MAILER_FROM_EMAIL`.
+
 ### Web App
 
 ```bash
@@ -30,6 +33,21 @@ npm run dev
 
 - Rails app health check: `GET /up`
 - Versioned API health check: `GET /api/v1/health`
+
+## Reminder operations
+
+The Rails app owns all reminder scheduling and delivery. For deploys where the web app and API run separately, trigger the daily reminder cycle on the API side with:
+
+```bash
+cd gift-tracker-api
+bin/rails reminders:run_daily
+```
+
+That task will:
+- queue reminders due for the target day
+- process queued reminder emails immediately
+
+For hosted deployments, run that command from a cron job, platform scheduler, or worker process.
 
 ## Why this structure
 
