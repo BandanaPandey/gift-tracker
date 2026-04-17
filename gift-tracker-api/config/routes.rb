@@ -9,6 +9,7 @@ Rails.application.routes.draw do
     namespace :v1 do
       get "health", to: "health#show"
       get "occasions/upcoming", to: "occasions#upcoming"
+      get "occasions/reminders", to: "occasions#reminders"
 
       resources :people
       resources :occasions, only: %i[index create update destroy]

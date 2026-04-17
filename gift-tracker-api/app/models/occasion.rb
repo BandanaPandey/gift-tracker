@@ -9,4 +9,22 @@ class Occasion < ApplicationRecord
 
   scope :chronological, -> { order(:date) }
   scope :upcoming, ->(from_date = Date.current) { where("date >= ?", from_date).order(:date) }
+
+  def reminder_date
+    date - reminder_days_before.days
+  end
+
+  def reminder_due_within?(window_days, from_date = Date.current)
+    return false unless reminder_enabled?
+
+    reminder_date <= (from_date + window_days.days)
+  end
+
+  def days_until_occurrence(from_date = Date.current)
+    (date - from_date).to_i
+  end
+
+  def days_until_reminder(from_date = Date.current)
+    (reminder_date - from_date).to_i
+  end
 end

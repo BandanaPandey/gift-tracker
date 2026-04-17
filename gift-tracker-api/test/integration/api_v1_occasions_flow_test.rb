@@ -17,6 +17,25 @@ class ApiV1OccasionsFlowTest < ActionDispatch::IntegrationTest
     assert_equal "Alex Birthday", json_response.first["title"]
   end
 
+  test "lists reminder feed entries within the requested window" do
+    Occasion.create!(
+      person: people(:one),
+      kind: "custom",
+      title: "Reminder test occasion",
+      date: Date.current + 20.days,
+      recurring_yearly: false,
+      reminder_days_before: 7,
+      reminder_enabled: true
+    )
+
+    get "/api/v1/occasions/reminders", params: { window_days: 30 }
+
+    assert_response :success
+    assert_equal "Reminder test occasion", json_response.first["title"]
+    assert_equal 7, json_response.first["reminder_days_before"]
+    assert json_response.first.key?("reminder_date")
+  end
+
   test "creates an occasion" do
     assert_difference("Occasion.count", 1) do
       post "/api/v1/occasions", params: {

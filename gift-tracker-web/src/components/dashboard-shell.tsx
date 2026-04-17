@@ -13,6 +13,7 @@ import {
   type DashboardData,
   type Occasion,
   type Person,
+  type ReminderFeedItem,
 } from "@/lib/api";
 
 const emptyPersonForm: CreatePersonInput = {
@@ -97,6 +98,7 @@ export function DashboardShell() {
   const [dashboard, setDashboard] = useState<DashboardData>({
     people: [],
     upcomingOccasions: [],
+    reminderFeed: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -293,6 +295,27 @@ export function DashboardShell() {
 
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <div className="space-y-6">
+            <Panel
+              eyebrow="Reminder runway"
+              title="Attention queue"
+              description="These are the moments where a reminder should surface soon based on your current lead times."
+            >
+              {loading ? (
+                <LoadingList />
+              ) : dashboard.reminderFeed.length > 0 ? (
+                <div className="grid gap-3">
+                  {dashboard.reminderFeed.map((reminder) => (
+                    <ReminderCard key={`${reminder.id}-${reminder.reminder_date}`} reminder={reminder} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No reminders due soon"
+                  description="As your occasion dates get closer, this queue will show which people need your attention next."
+                />
+              )}
+            </Panel>
+
             <Panel
               eyebrow="Soonest moments"
               title="Upcoming occasions"
@@ -704,6 +727,35 @@ function PersonCard({ person }: { person: Person }) {
           ))}
         </div>
       ) : null}
+    </article>
+  );
+}
+
+function ReminderCard({ reminder }: { reminder: ReminderFeedItem }) {
+  return (
+    <article className="rounded-[1.4rem] border border-[#e4c6b0] bg-[linear-gradient(135deg,#fff7ef,#fff1e5)] p-4 shadow-[0_12px_30px_rgba(83,55,32,0.06)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
+            reminder
+          </p>
+          <h3 className="mt-2 text-lg font-semibold">{reminder.title}</h3>
+          <p className="mt-1 text-sm text-muted">{reminder.person_name}</p>
+        </div>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#8b5b42]">
+          {formatOccasionDate(reminder.reminder_date)}
+        </span>
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#7a4e37]">
+        <span className="rounded-full bg-white px-3 py-1">
+          {reminder.days_until_reminder <= 0
+            ? "Due now"
+            : `In ${reminder.days_until_reminder} day${reminder.days_until_reminder === 1 ? "" : "s"}`}
+        </span>
+        <span className="rounded-full bg-white px-3 py-1">
+          Occasion in {reminder.days_until_occurrence} day{reminder.days_until_occurrence === 1 ? "" : "s"}
+        </span>
+      </div>
     </article>
   );
 }

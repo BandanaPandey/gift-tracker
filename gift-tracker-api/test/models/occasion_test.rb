@@ -58,4 +58,20 @@ class OccasionTest < ActiveSupport::TestCase
     assert_not_includes results, past_occasion
     assert_equal [sooner_occasion, later_occasion], results.first(2)
   end
+
+  test "calculates reminder date and days remaining" do
+    travel_date = Date.current + 20.days
+    occasion = Occasion.new(
+      person: people(:one),
+      kind: "custom",
+      title: "Trip planning",
+      date: travel_date,
+      reminder_days_before: 7,
+      reminder_enabled: true
+    )
+
+    assert_equal travel_date - 7.days, occasion.reminder_date
+    assert_equal 13, occasion.days_until_reminder
+    assert_equal 20, occasion.days_until_occurrence
+  end
 end

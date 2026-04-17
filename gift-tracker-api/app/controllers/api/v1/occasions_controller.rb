@@ -14,6 +14,17 @@ module Api
         render json: occasions.map { |occasion| occasion_payload(occasion) }
       end
 
+      def reminders
+        window_days = params.fetch(:window_days, 30).to_i.clamp(1, 365)
+        occasions = Occasion.includes(:person).upcoming.select do |occasion|
+          occasion.reminder_due_within?(window_days)
+        end
+
+        render json: occasions
+          .sort_by(&:reminder_date)
+          .map { |occasion| reminder_payload(occasion) }
+      end
+
       def create
         occasion = Occasion.new(occasion_params)
 
@@ -75,6 +86,14 @@ module Api
           created_at: occasion.created_at,
           updated_at: occasion.updated_at
         }
+      end
+
+      def reminder_payload(occasion)
+        occasion_payload(occasion).merge(
+          reminder_date: occasion.reminder_date,
+          days_until_reminder: occasion.days_until_reminder,
+          days_until_occurrence: occasion.days_until_occurrence
+        )
       end
     end
   end
