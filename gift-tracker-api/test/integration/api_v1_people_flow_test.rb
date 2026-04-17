@@ -2,12 +2,12 @@ require "test_helper"
 
 class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
   test "lists people with nested occasions and gift ideas" do
-    get "/api/v1/people"
+    get "/api/v1/people", headers: auth_headers_for(users(:one))
 
     assert_response :success
 
     payload = json_response
-    assert_equal 2, payload.length
+    assert_equal 1, payload.length
     assert_equal "Alex Johnson", payload.first["name"]
     assert_equal "alex@example.com", payload.first["email"]
     assert_equal "Alex Birthday", payload.first["occasions"].first["title"]
@@ -15,7 +15,7 @@ class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
   end
 
   test "shows a person" do
-    get "/api/v1/people/#{people(:one).id}"
+    get "/api/v1/people/#{people(:one).id}", headers: auth_headers_for(users(:one))
 
     assert_response :success
     assert_equal people(:one).id, json_response["id"]
@@ -31,7 +31,7 @@ class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
           notes: "Loves self-care gifts",
           interests: "Skincare, tea"
         }
-      }, as: :json
+      }, as: :json, headers: auth_headers_for(users(:one))
     end
 
     assert_response :created
@@ -44,9 +44,15 @@ class ApiV1PeopleFlowTest < ActionDispatch::IntegrationTest
       person: {
         relationship: "Sibling"
       }
-    }, as: :json
+    }, as: :json, headers: auth_headers_for(users(:one))
 
     assert_response :unprocessable_entity
     assert_includes json_response["errors"], "Name can't be blank"
+  end
+
+  test "does not show another users person" do
+    get "/api/v1/people/#{people(:two).id}", headers: auth_headers_for(users(:one))
+
+    assert_response :not_found
   end
 end

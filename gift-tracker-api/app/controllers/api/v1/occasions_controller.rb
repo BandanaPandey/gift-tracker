@@ -2,21 +2,28 @@ module Api
   module V1
     class OccasionsController < BaseController
       def index
-        occasions = Occasion.includes(:person).chronological
+        occasions = Occasion.includes(:person)
+          .joins(:person)
+          .where(people: { user_id: current_user.id })
+          .chronological
 
         render json: occasions.map { |occasion| occasion_payload(occasion) }
       end
 
       def upcoming
         limit = params.fetch(:limit, 10).to_i.clamp(1, 50)
-        occasions = Occasion.includes(:person).upcoming.limit(limit)
+        occasions = Occasion.includes(:person)
+          .joins(:person)
+          .where(people: { user_id: current_user.id })
+          .upcoming
+          .limit(limit)
 
         render json: occasions.map { |occasion| occasion_payload(occasion) }
       end
 
       def reminders
         window_days = params.fetch(:window_days, 30).to_i.clamp(1, 365)
-        occasions = Occasion.includes(:person).upcoming.select do |occasion|
+        occasions = Occasion.includes(:person).joins(:person).where(people: { user_id: current_user.id }).upcoming.select do |occasion|
           occasion.reminder_due_within?(window_days)
         end
 
@@ -26,7 +33,10 @@ module Api
       end
 
       def create
-        occasion = Occasion.new(occasion_params)
+        person_record = person
+        return if performed?
+
+        occasion = person_record.occasions.new(occasion_params.except(:person_id))
 
         if occasion.save
           render json: occasion_payload(occasion), status: :created
@@ -36,28 +46,36 @@ module Api
       end
 
       def update
+        occasion_record = occasion
         return if performed?
 
-        if occasion.update(occasion_params)
-          render json: occasion_payload(occasion)
+        if occasion_record.update(occasion_params)
+          render json: occasion_payload(occasion_record)
         else
-          render_validation_error(occasion)
+          render_validation_error(occasion_record)
         end
       end
 
       def destroy
+        occasion_record = occasion
         return if performed?
 
-        occasion.destroy
+        occasion_record.destroy
         head :no_content
       end
 
       private
 
       def occasion
-        @occasion ||= Occasion.includes(:person).find(params[:id])
+        @occasion ||= Occasion.includes(:person).joins(:person).where(people: { user_id: current_user.id }).find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Occasion")
+      end
+
+      def person
+        @person ||= current_user.people.find(occasion_params[:person_id])
+      rescue ActiveRecord::RecordNotFound
+        render_not_found("Person")
       end
 
       def occasion_params

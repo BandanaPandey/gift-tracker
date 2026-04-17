@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useState, useTransition } from "react";
+import { FormEvent, useCallback, useEffect, useState, useTransition } from "react";
 import {
+  type CurrentUser,
   createGiftIdea,
   createOccasion,
   createPerson,
@@ -98,7 +99,15 @@ function interestTags(interests: string | null) {
     : [];
 }
 
-export function DashboardShell() {
+export function DashboardShell({
+  token,
+  currentUser,
+  onLogout,
+}: {
+  token: string;
+  currentUser: CurrentUser;
+  onLogout: () => void;
+}) {
   const [dashboard, setDashboard] = useState<DashboardData>({
     people: [],
     upcomingOccasions: [],
@@ -124,17 +133,17 @@ export function DashboardShell() {
 
   const apiBaseUrl = getApiBaseUrl();
 
-  async function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchDashboardData();
+      const data = await fetchDashboardData(token);
       setDashboard(data);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load dashboard.");
     } finally {
       setLoading(false);
     }
-  }
+  }, [token]);
 
   useEffect(() => {
     if (dashboard.people.length === 0) {
@@ -155,7 +164,7 @@ export function DashboardShell() {
 
   useEffect(() => {
     void loadDashboard();
-  }, []);
+  }, [loadDashboard]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -164,7 +173,7 @@ export function DashboardShell() {
 
     startTransition(async () => {
       try {
-        await createPerson(formState);
+        await createPerson(formState, token);
         setFormState(emptyPersonForm);
         setSubmitSuccess("Person added to your gifting circle.");
         await loadDashboard();
@@ -183,7 +192,7 @@ export function DashboardShell() {
 
     startTransition(async () => {
       try {
-        await createOccasion(occasionForm);
+        await createOccasion(occasionForm, token);
         setOccasionForm((current) => ({
           ...emptyOccasionForm,
           person_id: current.person_id,
@@ -205,7 +214,7 @@ export function DashboardShell() {
 
     startTransition(async () => {
       try {
-        await createGiftIdea(giftIdeaForm);
+        await createGiftIdea(giftIdeaForm, token);
         setGiftIdeaForm((current) => ({
           ...emptyGiftIdeaForm,
           person_id: current.person_id,
@@ -226,7 +235,7 @@ export function DashboardShell() {
 
     startTransition(async () => {
       try {
-        const result = await queueReminderNotifications();
+        const result = await queueReminderNotifications(token);
         setQueueSuccess(
           result.queued_count > 0
             ? `${result.queued_count} reminder notification${result.queued_count === 1 ? "" : "s"} queued.`
@@ -247,7 +256,7 @@ export function DashboardShell() {
 
     startTransition(async () => {
       try {
-        const result = await processQueuedReminderNotifications();
+        const result = await processQueuedReminderNotifications(token);
         setProcessSuccess(
           result.processed_count > 0
             ? `${result.sent_count} sent, ${result.skipped_count} skipped.`
@@ -307,6 +316,11 @@ export function DashboardShell() {
               </p>
               <div className="mt-4 space-y-4">
                 <div className="rounded-2xl bg-black/20 p-4">
+                  <p className="text-sm text-[#d9bca5]">Signed in as</p>
+                  <p className="mt-2 text-sm font-medium">{currentUser.name}</p>
+                  <p className="mt-1 text-sm text-[#d9bca5]">{currentUser.email}</p>
+                </div>
+                <div className="rounded-2xl bg-black/20 p-4">
                   <p className="text-sm text-[#d9bca5]">API base URL</p>
                   <p className="mt-2 break-all text-sm">{apiBaseUrl}</p>
                 </div>
@@ -343,6 +357,13 @@ export function DashboardShell() {
                   className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
                 >
                   Process queued reminders
+                </button>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
+                >
+                  Log out
                 </button>
                 {queueError ? <p className="text-sm text-[#f4b9a2]">{queueError}</p> : null}
                 {queueSuccess ? <p className="text-sm text-[#d4f0da]">{queueSuccess}</p> : null}

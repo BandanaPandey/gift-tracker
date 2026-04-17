@@ -11,6 +11,8 @@ class Occasion < ApplicationRecord
   scope :chronological, -> { order(:date) }
   scope :upcoming, ->(from_date = Date.current) { where("date >= ?", from_date).order(:date) }
 
+  delegate :user, to: :person
+
   def reminder_date
     date - reminder_days_before.days
   end

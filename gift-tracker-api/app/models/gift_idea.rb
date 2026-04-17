@@ -8,4 +8,6 @@ class GiftIdea < ApplicationRecord
   validates :price_cents, numericality: { greater_than_or_equal_to: 0 }, allow_nil: true
 
   scope :recent_first, -> { order(created_at: :desc) }
+
+  delegate :user, to: :person
 end

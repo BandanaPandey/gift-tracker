@@ -2,19 +2,20 @@ module Api
   module V1
     class PeopleController < BaseController
       def index
-        people = Person.includes(:occasions, :gift_ideas).order(:name)
+        people = current_user.people.includes(:occasions, :gift_ideas).order(:name)
 
         render json: people.map { |person| person_payload(person) }
       end
 
       def show
+        person_record = person
         return if performed?
 
-        render json: person_payload(person)
+        render json: person_payload(person_record)
       end
 
       def create
-        person = Person.new(person_params)
+        person = current_user.people.new(person_params)
 
         if person.save
           render json: person_payload(person), status: :created
@@ -24,26 +25,28 @@ module Api
       end
 
       def update
+        person_record = person
         return if performed?
 
-        if person.update(person_params)
-          render json: person_payload(person)
+        if person_record.update(person_params)
+          render json: person_payload(person_record)
         else
-          render_validation_error(person)
+          render_validation_error(person_record)
         end
       end
 
       def destroy
+        person_record = person
         return if performed?
 
-        person.destroy
+        person_record.destroy
         head :no_content
       end
 
       private
 
       def person
-        @person ||= Person.includes(:occasions, :gift_ideas).find(params[:id])
+        @person ||= current_user.people.includes(:occasions, :gift_ideas).find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Person")
       end

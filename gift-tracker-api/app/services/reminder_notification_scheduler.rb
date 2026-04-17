@@ -1,10 +1,11 @@
 class ReminderNotificationScheduler
-  def self.schedule_for(target_date = Date.current)
-    new(target_date).schedule
+  def self.schedule_for(target_date = Date.current, user: nil)
+    new(target_date, user: user).schedule
   end
 
-  def initialize(target_date)
+  def initialize(target_date, user: nil)
     @target_date = target_date
+    @user = user
   end
 
   def schedule
@@ -22,9 +23,13 @@ class ReminderNotificationScheduler
   private
 
   attr_reader :target_date
+  attr_reader :user
 
   def due_occasions
-    Occasion.includes(:person).upcoming(target_date).select do |occasion|
+    scope = Occasion.includes(:person).upcoming(target_date)
+    scope = scope.joins(:person).where(people: { user_id: user.id }) if user.present?
+
+    scope.select do |occasion|
       occasion.reminder_enabled? && occasion.reminder_date == target_date
     end
   end

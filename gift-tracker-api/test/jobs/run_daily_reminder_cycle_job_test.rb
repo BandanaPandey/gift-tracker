@@ -8,6 +8,7 @@ class RunDailyReminderCycleJobTest < ActiveJob::TestCase
 
   test "queues and processes due reminders for a target date" do
     person = Person.create!(
+      user: users(:one),
       name: "Aarav Mehta",
       email: "aarav@example.com",
       relationship: "Friend"

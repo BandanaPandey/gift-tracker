@@ -2,14 +2,18 @@ module Api
   module V1
     class ReminderNotificationsController < BaseController
       def index
-        notifications = ReminderNotification.includes(occasion: :person).recent_first.limit(limit)
+        notifications = ReminderNotification.includes(occasion: :person)
+          .joins(occasion: :person)
+          .where(people: { user_id: current_user.id })
+          .recent_first
+          .limit(limit)
 
         render json: notifications.map { |notification| notification_payload(notification) }
       end
 
       def queue
         target_date = params[:target_date].present? ? Date.parse(params[:target_date]) : Date.current
-        notifications = ReminderNotificationScheduler.schedule_for(target_date)
+        notifications = ReminderNotificationScheduler.schedule_for(target_date, user: current_user)
 
         render json: {
           target_date: target_date,
@@ -21,7 +25,7 @@ module Api
       end
 
       def process_queue
-        notifications = ReminderNotificationProcessor.process(limit: limit)
+        notifications = ReminderNotificationProcessor.process(limit: limit, user: current_user)
 
         render json: {
           processed_count: notifications.count,

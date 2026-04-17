@@ -31,6 +31,17 @@ export type Person = {
   gift_ideas: GiftIdea[];
 };
 
+export type CurrentUser = {
+  id: number;
+  name: string;
+  email: string;
+};
+
+export type AuthResponse = {
+  token: string;
+  user: CurrentUser;
+};
+
 export type DashboardData = {
   people: Person[];
   upcomingOccasions: Occasion[];
@@ -89,6 +100,14 @@ export function getApiBaseUrl() {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3001";
 }
 
+function authHeaders(token?: string): Record<string, string> {
+  return token
+    ? {
+        Authorization: `Bearer ${token}`,
+      }
+    : {};
+}
+
 async function parseJson<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
@@ -105,33 +124,37 @@ async function parseJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchDashboardData(): Promise<DashboardData> {
+export async function fetchDashboardData(token: string): Promise<DashboardData> {
   const apiBaseUrl = getApiBaseUrl();
   const [people, upcomingOccasions, reminderFeed, reminderActivity] = await Promise.all([
-    fetch(`${apiBaseUrl}/api/v1/people`, { cache: "no-store" }).then((response) =>
+    fetch(`${apiBaseUrl}/api/v1/people`, { cache: "no-store", headers: authHeaders(token) }).then((response) =>
       parseJson<Person[]>(response),
     ),
     fetch(`${apiBaseUrl}/api/v1/occasions/upcoming?limit=6`, {
       cache: "no-store",
+      headers: authHeaders(token),
     }).then((response) => parseJson<Occasion[]>(response)),
     fetch(`${apiBaseUrl}/api/v1/occasions/reminders?window_days=60`, {
       cache: "no-store",
+      headers: authHeaders(token),
     }).then((response) => parseJson<ReminderFeedItem[]>(response)),
     fetch(`${apiBaseUrl}/api/v1/reminder_notifications?limit=8`, {
       cache: "no-store",
+      headers: authHeaders(token),
     }).then((response) => parseJson<ReminderNotification[]>(response)),
   ]);
 
   return { people, upcomingOccasions, reminderFeed, reminderActivity };
 }
 
-export async function createPerson(input: CreatePersonInput) {
+export async function createPerson(input: CreatePersonInput, token: string) {
   const apiBaseUrl = getApiBaseUrl();
 
   return fetch(`${apiBaseUrl}/api/v1/people`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(token),
     },
     body: JSON.stringify({
       person: input,
@@ -139,13 +162,14 @@ export async function createPerson(input: CreatePersonInput) {
   }).then((response) => parseJson<Person>(response));
 }
 
-export async function createOccasion(input: CreateOccasionInput) {
+export async function createOccasion(input: CreateOccasionInput, token: string) {
   const apiBaseUrl = getApiBaseUrl();
 
   return fetch(`${apiBaseUrl}/api/v1/occasions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(token),
     },
     body: JSON.stringify({
       occasion: input,
@@ -153,13 +177,14 @@ export async function createOccasion(input: CreateOccasionInput) {
   }).then((response) => parseJson<Occasion>(response));
 }
 
-export async function createGiftIdea(input: CreateGiftIdeaInput) {
+export async function createGiftIdea(input: CreateGiftIdeaInput, token: string) {
   const apiBaseUrl = getApiBaseUrl();
 
   return fetch(`${apiBaseUrl}/api/v1/gift_ideas`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(token),
     },
     body: JSON.stringify({
       gift_idea: input,
@@ -167,13 +192,14 @@ export async function createGiftIdea(input: CreateGiftIdeaInput) {
   }).then((response) => parseJson<GiftIdea>(response));
 }
 
-export async function queueReminderNotifications(targetDate?: string) {
+export async function queueReminderNotifications(token: string, targetDate?: string) {
   const apiBaseUrl = getApiBaseUrl();
 
   return fetch(`${apiBaseUrl}/api/v1/reminder_notifications/queue`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(token),
     },
     body: JSON.stringify(targetDate ? { target_date: targetDate } : {}),
   }).then((response) =>
@@ -185,13 +211,14 @@ export async function queueReminderNotifications(targetDate?: string) {
   );
 }
 
-export async function processQueuedReminderNotifications() {
+export async function processQueuedReminderNotifications(token: string) {
   const apiBaseUrl = getApiBaseUrl();
 
   return fetch(`${apiBaseUrl}/api/v1/reminder_notifications/process`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(token),
     },
   }).then((response) =>
     parseJson<{
@@ -201,4 +228,42 @@ export async function processQueuedReminderNotifications() {
       notifications: ReminderNotification[];
     }>(response),
   );
+}
+
+export async function signUp(input: {
+  name: string;
+  email: string;
+  password: string;
+  password_confirmation: string;
+}) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/auth/signup`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ user: input }),
+  }).then((response) => parseJson<AuthResponse>(response));
+}
+
+export async function login(input: { email: string; password: string }) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/auth/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ session: input }),
+  }).then((response) => parseJson<AuthResponse>(response));
+}
+
+export async function fetchCurrentUser(token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/auth/me`, {
+    headers: authHeaders(token),
+    cache: "no-store",
+  }).then((response) => parseJson<{ user: CurrentUser }>(response));
 }

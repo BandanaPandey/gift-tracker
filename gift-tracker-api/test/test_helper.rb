@@ -17,6 +17,12 @@ end
 class ActionDispatch::IntegrationTest
   private
 
+  def auth_headers_for(user)
+    {
+      "Authorization" => "Bearer #{AuthToken.issue_for(user)}"
+    }
+  end
+
   def json_response
     JSON.parse(response.body)
   end

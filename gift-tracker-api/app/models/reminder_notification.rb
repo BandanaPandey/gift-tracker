@@ -12,4 +12,5 @@ class ReminderNotification < ApplicationRecord
   scope :queued, -> { where(status: "queued") }
 
   delegate :person, to: :occasion
+  delegate :user, to: :person
 end

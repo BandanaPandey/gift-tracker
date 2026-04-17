@@ -1,6 +1,9 @@
 class ReminderNotificationProcessor
-  def self.process(limit: 25)
-    ReminderNotification.queued.recent_first.limit(limit).map do |notification|
+  def self.process(limit: 25, user: nil)
+    scope = ReminderNotification.queued.recent_first
+    scope = scope.joins(occasion: :person).where(people: { user_id: user.id }) if user.present?
+
+    scope.limit(limit).map do |notification|
       new(notification).process
     end
   end

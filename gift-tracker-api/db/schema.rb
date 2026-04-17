@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_17_083000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_17_121000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -49,7 +49,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_17_083000) do
     t.text "notes"
     t.string "relationship"
     t.datetime "updated_at", null: false
+    t.bigint "user_id"
     t.index ["name"], name: "index_people_on_name"
+    t.index ["user_id", "name"], name: "index_people_on_user_id_and_name"
+    t.index ["user_id"], name: "index_people_on_user_id"
   end
 
   create_table "reminder_notifications", force: :cascade do |t|
@@ -65,7 +68,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_17_083000) do
     t.index ["occasion_id"], name: "index_reminder_notifications_on_occasion_id"
   end
 
+  create_table "users", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "email", null: false
+    t.string "name", null: false
+    t.string "password_digest", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
   add_foreign_key "gift_ideas", "people"
   add_foreign_key "occasions", "people"
+  add_foreign_key "people", "users"
   add_foreign_key "reminder_notifications", "occasions"
 end

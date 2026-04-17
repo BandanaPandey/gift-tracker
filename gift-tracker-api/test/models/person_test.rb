@@ -6,7 +6,7 @@ class PersonTest < ActiveSupport::TestCase
   end
 
   test "requires a name" do
-    person = Person.new(relationship: "Friend")
+    person = Person.new(user: users(:one), relationship: "Friend")
 
     assert_not person.valid?
     assert_includes person.errors[:name], "can't be blank"

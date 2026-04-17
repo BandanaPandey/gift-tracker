@@ -1,6 +1,8 @@
 module Api
   module V1
     class BaseController < ApplicationController
+      before_action :authenticate_user!
+
       private
 
       def render_not_found(resource_name)
