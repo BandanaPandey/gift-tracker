@@ -3,8 +3,7 @@ module Api
     class ReminderNotificationsController < BaseController
       def index
         notifications = ReminderNotification.includes(occasion: :person)
-          .joins(occasion: :person)
-          .where(people: { user_id: current_user.id })
+          .for_user(current_user)
           .recent_first
           .limit(limit)
 

@@ -3,8 +3,7 @@ module Api
     class GiftIdeasController < BaseController
       def index
         gift_ideas = GiftIdea.includes(:person)
-          .joins(:person)
-          .where(people: { user_id: current_user.id })
+          .for_user(current_user)
           .recent_first
         gift_ideas = gift_ideas.where(status: params[:status]) if params[:status].present?
 
@@ -46,13 +45,13 @@ module Api
       private
 
       def gift_idea
-        @gift_idea ||= GiftIdea.includes(:person).joins(:person).where(people: { user_id: current_user.id }).find(params[:id])
+        @gift_idea ||= GiftIdea.includes(:person).for_user(current_user).find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Gift idea")
       end
 
       def person
-        @person ||= current_user.people.find(gift_idea_params[:person_id])
+        @person ||= Person.for_user(current_user).find(gift_idea_params[:person_id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Person")
       end

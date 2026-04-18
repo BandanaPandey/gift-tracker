@@ -20,4 +20,8 @@ class ReminderNotificationTest < ActiveSupport::TestCase
   test "returns only queued notifications from queued scope" do
     assert_equal [ reminder_notifications(:queued_today) ], ReminderNotification.queued.to_a
   end
+
+  test "for_user scope only returns owned notifications" do
+    assert_equal [reminder_notifications(:queued_today)], ReminderNotification.for_user(users(:one)).to_a
+  end
 end

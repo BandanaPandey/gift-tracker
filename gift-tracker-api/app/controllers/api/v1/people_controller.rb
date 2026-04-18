@@ -2,7 +2,7 @@ module Api
   module V1
     class PeopleController < BaseController
       def index
-        people = current_user.people.includes(:occasions, :gift_ideas).order(:name)
+        people = Person.for_user(current_user).includes(:occasions, :gift_ideas).order(:name)
 
         render json: people.map { |person| person_payload(person) }
       end
@@ -46,7 +46,7 @@ module Api
       private
 
       def person
-        @person ||= current_user.people.includes(:occasions, :gift_ideas).find(params[:id])
+        @person ||= Person.for_user(current_user).includes(:occasions, :gift_ideas).find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Person")
       end

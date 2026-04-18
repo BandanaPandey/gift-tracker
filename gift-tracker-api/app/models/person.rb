@@ -5,4 +5,6 @@ class Person < ApplicationRecord
 
   validates :name, presence: true
   validates :email, format: { with: URI::MailTo::EMAIL_REGEXP }, allow_blank: true
+
+  scope :for_user, ->(user) { where(user: user) }
 end

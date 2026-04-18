@@ -27,4 +27,8 @@ class GiftIdeaTest < ActiveSupport::TestCase
     assert_not gift_idea.valid?
     assert_includes gift_idea.errors[:price_cents], "must be greater than or equal to 0"
   end
+
+  test "for_user scope only returns owned gift ideas" do
+    assert_equal [gift_ideas(:one)], GiftIdea.for_user(users(:one)).to_a
+  end
 end

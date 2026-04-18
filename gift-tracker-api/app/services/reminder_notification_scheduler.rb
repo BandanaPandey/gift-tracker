@@ -27,7 +27,7 @@ class ReminderNotificationScheduler
 
   def due_occasions
     scope = Occasion.includes(:person).upcoming(target_date)
-    scope = scope.joins(:person).where(people: { user_id: user.id }) if user.present?
+    scope = scope.for_user(user) if user.present?
 
     scope.select do |occasion|
       occasion.reminder_enabled? && occasion.reminder_date == target_date

@@ -10,6 +10,7 @@ class Occasion < ApplicationRecord
 
   scope :chronological, -> { order(:date) }
   scope :upcoming, ->(from_date = Date.current) { where("date >= ?", from_date).order(:date) }
+  scope :for_user, ->(user) { joins(:person).where(people: { user_id: user.id }) }
 
   delegate :user, to: :person
 

@@ -74,4 +74,8 @@ class OccasionTest < ActiveSupport::TestCase
     assert_equal 13, occasion.days_until_reminder
     assert_equal 20, occasion.days_until_occurrence
   end
+
+  test "for_user scope only returns owned occasions" do
+    assert_equal [occasions(:one)], Occasion.for_user(users(:one)).to_a
+  end
 end

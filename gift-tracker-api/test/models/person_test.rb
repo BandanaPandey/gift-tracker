@@ -21,6 +21,17 @@ class PersonTest < ActiveSupport::TestCase
     assert_includes people(:one).errors[:email], "is invalid"
   end
 
+  test "requires a user owner" do
+    person = Person.new(name: "Ownerless")
+
+    assert_not person.valid?
+    assert_includes person.errors[:user], "must exist"
+  end
+
+  test "for_user scope only returns owned records" do
+    assert_equal [people(:one)], Person.for_user(users(:one)).to_a
+  end
+
   test "destroys dependent occasions and gift ideas" do
     person = people(:one)
 

@@ -3,8 +3,7 @@ module Api
     class OccasionsController < BaseController
       def index
         occasions = Occasion.includes(:person)
-          .joins(:person)
-          .where(people: { user_id: current_user.id })
+          .for_user(current_user)
           .chronological
 
         render json: occasions.map { |occasion| occasion_payload(occasion) }
@@ -13,8 +12,7 @@ module Api
       def upcoming
         limit = params.fetch(:limit, 10).to_i.clamp(1, 50)
         occasions = Occasion.includes(:person)
-          .joins(:person)
-          .where(people: { user_id: current_user.id })
+          .for_user(current_user)
           .upcoming
           .limit(limit)
 
@@ -23,7 +21,7 @@ module Api
 
       def reminders
         window_days = params.fetch(:window_days, 30).to_i.clamp(1, 365)
-        occasions = Occasion.includes(:person).joins(:person).where(people: { user_id: current_user.id }).upcoming.select do |occasion|
+        occasions = Occasion.includes(:person).for_user(current_user).upcoming.select do |occasion|
           occasion.reminder_due_within?(window_days)
         end
 
@@ -67,13 +65,13 @@ module Api
       private
 
       def occasion
-        @occasion ||= Occasion.includes(:person).joins(:person).where(people: { user_id: current_user.id }).find(params[:id])
+        @occasion ||= Occasion.includes(:person).for_user(current_user).find(params[:id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Occasion")
       end
 
       def person
-        @person ||= current_user.people.find(occasion_params[:person_id])
+        @person ||= Person.for_user(current_user).find(occasion_params[:person_id])
       rescue ActiveRecord::RecordNotFound
         render_not_found("Person")
       end
