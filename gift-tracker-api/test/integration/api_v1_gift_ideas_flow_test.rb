@@ -61,4 +61,18 @@ class ApiV1GiftIdeasFlowTest < ActionDispatch::IntegrationTest
 
     assert_response :not_found
   end
+
+  test "deletes a gift idea" do
+    assert_difference("GiftIdea.count", -1) do
+      delete "/api/v1/gift_ideas/#{gift_ideas(:one).id}", headers: auth_headers_for(users(:one))
+    end
+
+    assert_response :no_content
+  end
+
+  test "does not delete another users gift idea" do
+    delete "/api/v1/gift_ideas/#{gift_ideas(:two).id}", headers: auth_headers_for(users(:one))
+
+    assert_response :not_found
+  end
 end

@@ -70,6 +70,29 @@ class ApiV1OccasionsFlowTest < ActionDispatch::IntegrationTest
     assert_includes json_response["errors"], "Kind is not included in the list"
   end
 
+  test "updates an occasion" do
+    patch "/api/v1/occasions/#{occasions(:one).id}", params: {
+      occasion: {
+        title: "Alex Big Birthday",
+        reminder_days_before: 30,
+        reminder_enabled: false
+      }
+    }, as: :json, headers: auth_headers_for(users(:one))
+
+    assert_response :success
+    assert_equal "Alex Big Birthday", json_response["title"]
+    assert_equal 30, json_response["reminder_days_before"]
+    assert_equal false, json_response["reminder_enabled"]
+  end
+
+  test "deletes an occasion" do
+    assert_difference("Occasion.count", -1) do
+      delete "/api/v1/occasions/#{occasions(:one).id}", headers: auth_headers_for(users(:one))
+    end
+
+    assert_response :no_content
+  end
+
   test "does not create an occasion for another users person" do
     post "/api/v1/occasions", params: {
       occasion: {
@@ -79,6 +102,22 @@ class ApiV1OccasionsFlowTest < ActionDispatch::IntegrationTest
         date: "2099-01-01"
       }
     }, as: :json, headers: auth_headers_for(users(:one))
+
+    assert_response :not_found
+  end
+
+  test "does not update another users occasion" do
+    patch "/api/v1/occasions/#{occasions(:two).id}", params: {
+      occasion: {
+        title: "Blocked Update"
+      }
+    }, as: :json, headers: auth_headers_for(users(:one))
+
+    assert_response :not_found
+  end
+
+  test "does not delete another users occasion" do
+    delete "/api/v1/occasions/#{occasions(:two).id}", headers: auth_headers_for(users(:one))
 
     assert_response :not_found
   end

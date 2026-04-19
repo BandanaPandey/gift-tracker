@@ -121,6 +121,10 @@ async function parseJson<T>(response: Response): Promise<T> {
     throw new Error(message);
   }
 
+  if (response.status === 204 || response.status === 205) {
+    return undefined as T;
+  }
+
   return response.json() as Promise<T>;
 }
 
@@ -162,6 +166,30 @@ export async function createPerson(input: CreatePersonInput, token: string) {
   }).then((response) => parseJson<Person>(response));
 }
 
+export async function updatePerson(id: number, input: CreatePersonInput, token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/people/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({
+      person: input,
+    }),
+  }).then((response) => parseJson<Person>(response));
+}
+
+export async function deletePerson(id: number, token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/people/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((response) => parseJson<void>(response));
+}
+
 export async function createOccasion(input: CreateOccasionInput, token: string) {
   const apiBaseUrl = getApiBaseUrl();
 
@@ -177,6 +205,30 @@ export async function createOccasion(input: CreateOccasionInput, token: string) 
   }).then((response) => parseJson<Occasion>(response));
 }
 
+export async function updateOccasion(id: number, input: CreateOccasionInput, token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/occasions/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({
+      occasion: input,
+    }),
+  }).then((response) => parseJson<Occasion>(response));
+}
+
+export async function deleteOccasion(id: number, token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/occasions/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((response) => parseJson<void>(response));
+}
+
 export async function createGiftIdea(input: CreateGiftIdeaInput, token: string) {
   const apiBaseUrl = getApiBaseUrl();
 
@@ -190,6 +242,30 @@ export async function createGiftIdea(input: CreateGiftIdeaInput, token: string) 
       gift_idea: input,
     }),
   }).then((response) => parseJson<GiftIdea>(response));
+}
+
+export async function updateGiftIdea(id: number, input: CreateGiftIdeaInput, token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/gift_ideas/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({
+      gift_idea: input,
+    }),
+  }).then((response) => parseJson<GiftIdea>(response));
+}
+
+export async function deleteGiftIdea(id: number, token: string) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/gift_ideas/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  }).then((response) => parseJson<void>(response));
 }
 
 export async function queueReminderNotifications(token: string, targetDate?: string) {

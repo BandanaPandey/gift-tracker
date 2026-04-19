@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState, useTransition } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import {
-  type CurrentUser,
   createGiftIdea,
   createOccasion,
   createPerson,
+  deleteGiftIdea,
+  deleteOccasion,
+  deletePerson,
   fetchDashboardData,
   getApiBaseUrl,
   processQueuedReminderNotifications,
@@ -13,11 +15,16 @@ import {
   type CreateGiftIdeaInput,
   type CreateOccasionInput,
   type CreatePersonInput,
+  type CurrentUser,
   type DashboardData,
+  type GiftIdea,
   type Occasion,
   type Person,
   type ReminderFeedItem,
   type ReminderNotification,
+  updateGiftIdea,
+  updateOccasion,
+  updatePerson,
 } from "@/lib/api";
 
 const emptyPersonForm: CreatePersonInput = {
@@ -62,6 +69,34 @@ const giftIdeaStatuses = [
   { value: "archived", label: "Archived" },
 ];
 
+type EditorTarget =
+  | { type: "person"; id: number }
+  | { type: "occasion"; id: number }
+  | { type: "giftIdea"; id: number };
+
+type DeleteTarget =
+  | {
+      type: "person";
+      id: number;
+      title: string;
+      description: string;
+      confirmLabel: string;
+    }
+  | {
+      type: "occasion";
+      id: number;
+      title: string;
+      description: string;
+      confirmLabel: string;
+    }
+  | {
+      type: "giftIdea";
+      id: number;
+      title: string;
+      description: string;
+      confirmLabel: string;
+    };
+
 function formatOccasionDate(date: string) {
   return new Intl.DateTimeFormat("en", {
     month: "short",
@@ -90,6 +125,10 @@ function totalBoughtIdeas(people: Person[]) {
   );
 }
 
+function totalOccasions(people: Person[]) {
+  return people.reduce((sum, person) => sum + person.occasions.length, 0);
+}
+
 function interestTags(interests: string | null) {
   return interests
     ? interests
@@ -97,6 +136,39 @@ function interestTags(interests: string | null) {
         .map((value) => value.trim())
         .filter(Boolean)
     : [];
+}
+
+function personToForm(person: Person): CreatePersonInput {
+  return {
+    name: person.name,
+    email: person.email ?? "",
+    relationship: person.relationship ?? "",
+    interests: person.interests ?? "",
+    notes: person.notes ?? "",
+  };
+}
+
+function occasionToForm(occasion: Occasion): CreateOccasionInput {
+  return {
+    person_id: occasion.person_id,
+    kind: occasion.kind,
+    title: occasion.title,
+    date: occasion.date,
+    recurring_yearly: occasion.recurring_yearly,
+    reminder_days_before: occasion.reminder_days_before,
+    reminder_enabled: occasion.reminder_enabled,
+  };
+}
+
+function giftIdeaToForm(giftIdea: GiftIdea): CreateGiftIdeaInput {
+  return {
+    person_id: giftIdea.person_id,
+    title: giftIdea.title,
+    url: giftIdea.url ?? "",
+    price_cents: giftIdea.price_cents,
+    notes: giftIdea.notes ?? "",
+    status: giftIdea.status,
+  };
 }
 
 export function DashboardShell({
@@ -126,9 +198,18 @@ export function DashboardShell({
   const [queueSuccess, setQueueSuccess] = useState<string | null>(null);
   const [processError, setProcessError] = useState<string | null>(null);
   const [processSuccess, setProcessSuccess] = useState<string | null>(null);
+  const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [editorSuccess, setEditorSuccess] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [formState, setFormState] = useState<CreatePersonInput>(emptyPersonForm);
   const [occasionForm, setOccasionForm] = useState<CreateOccasionInput>(emptyOccasionForm);
   const [giftIdeaForm, setGiftIdeaForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
+  const [personEditForm, setPersonEditForm] = useState<CreatePersonInput>(emptyPersonForm);
+  const [occasionEditForm, setOccasionEditForm] = useState<CreateOccasionInput>(emptyOccasionForm);
+  const [giftIdeaEditForm, setGiftIdeaEditForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
   const [isPending, startTransition] = useTransition();
 
   const apiBaseUrl = getApiBaseUrl();
@@ -144,6 +225,41 @@ export function DashboardShell({
       setLoading(false);
     }
   }, [token]);
+
+  const allOccasions = useMemo(
+    () =>
+      dashboard.people.flatMap((person) =>
+        person.occasions.map((occasion) => ({
+          ...occasion,
+          person_name: person.name,
+        })),
+      ),
+    [dashboard.people],
+  );
+
+  const allGiftIdeas = useMemo(
+    () =>
+      dashboard.people.flatMap((person) =>
+        person.gift_ideas.map((giftIdea) => ({
+          ...giftIdea,
+          person_name: person.name,
+        })),
+      ),
+    [dashboard.people],
+  );
+
+  const selectedPerson =
+    editorTarget?.type === "person"
+      ? dashboard.people.find((person) => person.id === editorTarget.id) ?? null
+      : null;
+  const selectedOccasion =
+    editorTarget?.type === "occasion"
+      ? allOccasions.find((occasion) => occasion.id === editorTarget.id) ?? null
+      : null;
+  const selectedGiftIdea =
+    editorTarget?.type === "giftIdea"
+      ? allGiftIdeas.find((giftIdea) => giftIdea.id === editorTarget.id) ?? null
+      : null;
 
   useEffect(() => {
     if (dashboard.people.length === 0) {
@@ -165,6 +281,95 @@ export function DashboardShell({
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    if (editorTarget?.type === "person" && selectedPerson) {
+      setPersonEditForm(personToForm(selectedPerson));
+    }
+  }, [editorTarget, selectedPerson]);
+
+  useEffect(() => {
+    if (editorTarget?.type === "occasion" && selectedOccasion) {
+      setOccasionEditForm(occasionToForm(selectedOccasion));
+    }
+  }, [editorTarget, selectedOccasion]);
+
+  useEffect(() => {
+    if (editorTarget?.type === "giftIdea" && selectedGiftIdea) {
+      setGiftIdeaEditForm(giftIdeaToForm(selectedGiftIdea));
+    }
+  }, [editorTarget, selectedGiftIdea]);
+
+  function clearEditorMessages() {
+    setEditorError(null);
+    setEditorSuccess(null);
+    setDeleteError(null);
+    setDeleteSuccess(null);
+  }
+
+  function openPersonEditor(person: Person) {
+    clearEditorMessages();
+    setDeleteTarget(null);
+    setEditorTarget({ type: "person", id: person.id });
+    setPersonEditForm(personToForm(person));
+  }
+
+  function openOccasionEditor(occasion: Occasion) {
+    clearEditorMessages();
+    setDeleteTarget(null);
+    setEditorTarget({ type: "occasion", id: occasion.id });
+    setOccasionEditForm(occasionToForm(occasion));
+  }
+
+  function openGiftIdeaEditor(giftIdea: GiftIdea) {
+    clearEditorMessages();
+    setDeleteTarget(null);
+    setEditorTarget({ type: "giftIdea", id: giftIdea.id });
+    setGiftIdeaEditForm(giftIdeaToForm(giftIdea));
+  }
+
+  function openPersonDelete(person: Person) {
+    clearEditorMessages();
+    setEditorTarget(null);
+    setDeleteTarget({
+      type: "person",
+      id: person.id,
+      title: `Delete ${person.name}?`,
+      description:
+        "This permanently removes the person, all of their occasions, and all of their saved gift ideas. This action cannot be undone.",
+      confirmLabel: "Delete person and related records",
+    });
+  }
+
+  function openOccasionDelete(occasion: Occasion) {
+    clearEditorMessages();
+    setEditorTarget(null);
+    setDeleteTarget({
+      type: "occasion",
+      id: occasion.id,
+      title: `Delete ${occasion.title}?`,
+      description: "This permanently removes the occasion from your reminder timeline.",
+      confirmLabel: "Delete occasion",
+    });
+  }
+
+  function openGiftIdeaDelete(giftIdea: GiftIdea) {
+    clearEditorMessages();
+    setEditorTarget(null);
+    setDeleteTarget({
+      type: "giftIdea",
+      id: giftIdea.id,
+      title: `Delete ${giftIdea.title}?`,
+      description: "This permanently removes the gift idea from your planning list.",
+      confirmLabel: "Delete gift idea",
+    });
+  }
+
+  function resetStudio() {
+    setEditorTarget(null);
+    setDeleteTarget(null);
+    clearEditorMessages();
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -244,7 +449,7 @@ export function DashboardShell({
         await loadDashboard();
       } catch (queueErr) {
         setQueueError(
-          queueErr instanceof Error ? queueErr.message : "Unable to queue reminders right now."
+          queueErr instanceof Error ? queueErr.message : "Unable to queue reminders right now.",
         );
       }
     });
@@ -271,36 +476,130 @@ export function DashboardShell({
     });
   }
 
+  function handlePersonUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPerson) {
+      return;
+    }
+
+    setEditorError(null);
+    setEditorSuccess(null);
+
+    startTransition(async () => {
+      try {
+        await updatePerson(selectedPerson.id, personEditForm, token);
+        setEditorSuccess("Person details updated.");
+        await loadDashboard();
+      } catch (updateErr) {
+        setEditorError(
+          updateErr instanceof Error ? updateErr.message : "Unable to update this person right now.",
+        );
+      }
+    });
+  }
+
+  function handleOccasionUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedOccasion) {
+      return;
+    }
+
+    setEditorError(null);
+    setEditorSuccess(null);
+
+    startTransition(async () => {
+      try {
+        await updateOccasion(selectedOccasion.id, occasionEditForm, token);
+        setEditorSuccess("Occasion updated.");
+        await loadDashboard();
+      } catch (updateErr) {
+        setEditorError(
+          updateErr instanceof Error
+            ? updateErr.message
+            : "Unable to update this occasion right now.",
+        );
+      }
+    });
+  }
+
+  function handleGiftIdeaUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedGiftIdea) {
+      return;
+    }
+
+    setEditorError(null);
+    setEditorSuccess(null);
+
+    startTransition(async () => {
+      try {
+        await updateGiftIdea(selectedGiftIdea.id, giftIdeaEditForm, token);
+        setEditorSuccess("Gift idea updated.");
+        await loadDashboard();
+      } catch (updateErr) {
+        setEditorError(
+          updateErr instanceof Error
+            ? updateErr.message
+            : "Unable to update this gift idea right now.",
+        );
+      }
+    });
+  }
+
+  function handleConfirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setDeleteError(null);
+    setDeleteSuccess(null);
+
+    startTransition(async () => {
+      try {
+        if (deleteTarget.type === "person") {
+          await deletePerson(deleteTarget.id, token);
+          setDeleteSuccess("Person and related records removed.");
+        } else if (deleteTarget.type === "occasion") {
+          await deleteOccasion(deleteTarget.id, token);
+          setDeleteSuccess("Occasion removed.");
+        } else {
+          await deleteGiftIdea(deleteTarget.id, token);
+          setDeleteSuccess("Gift idea removed.");
+        }
+
+        await loadDashboard();
+        setDeleteTarget(null);
+        setEditorTarget(null);
+      } catch (deleteErr) {
+        setDeleteError(
+          deleteErr instanceof Error ? deleteErr.message : "Unable to delete this record right now.",
+        );
+      }
+    });
+  }
+
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#fff7ee,_#f4ebde_48%,_#e4d4c1)] px-5 py-8 text-foreground sm:px-8 lg:px-10">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-72 max-w-5xl rounded-full bg-[radial-gradient(circle,_rgba(184,92,56,0.18),_transparent_72%)] blur-3xl" />
+    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#fff9f2,_#f2e6d7_42%,_#e2cfb9)] px-4 py-6 text-foreground sm:px-6 sm:py-8 lg:px-10">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-80 max-w-6xl rounded-full bg-[radial-gradient(circle,_rgba(184,92,56,0.16),_transparent_70%)] blur-3xl" />
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
-        <section className="overflow-hidden rounded-[2rem] border border-white/50 bg-[linear-gradient(135deg,rgba(255,250,242,0.94),rgba(255,242,226,0.88))] shadow-[0_30px_90px_rgba(83,55,32,0.14)] backdrop-blur">
-          <div className="grid gap-6 px-6 py-7 sm:px-8 lg:grid-cols-[1.4fr_0.9fr] lg:px-10 lg:py-10">
+        <section className="overflow-hidden rounded-[2rem] border border-white/60 bg-[linear-gradient(135deg,rgba(255,250,242,0.96),rgba(255,242,226,0.9))] shadow-[0_35px_90px_rgba(83,55,32,0.16)] backdrop-blur">
+          <div className="grid gap-8 px-5 py-6 sm:px-7 lg:grid-cols-[1.35fr_0.95fr] lg:px-10 lg:py-9">
             <div className="space-y-5">
-              <span className="inline-flex rounded-full bg-[#f2d7c2] px-4 py-1 text-sm font-medium text-[#9d4d2e]">
-                Dashboard
+              <span className="inline-flex rounded-full border border-[#e7c9b0] bg-[#fff5ea] px-4 py-1 text-sm font-medium text-[#9d4d2e]">
+                Warm editorial dashboard
               </span>
               <div className="space-y-3">
-                <h1 className="max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-                  Keep the right gifts warm before the important dates arrive.
+                <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-[#2b221b] sm:text-5xl">
+                  Keep gift planning calm, clear, and beautifully close at hand.
                 </h1>
                 <p className="max-w-2xl text-base leading-7 text-muted sm:text-lg">
-                  This dashboard gives you one place to track people, upcoming occasions,
-                  and the gift ideas already in motion.
+                  Manage people, special dates, and ideas from one responsive workspace with
+                  smoother editing, safer delete flows, and a little more breathing room.
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <StatCard
-                  label="People tracked"
-                  value={String(dashboard.people.length)}
-                  tone="cream"
-                />
-                <StatCard
-                  label="Upcoming dates"
-                  value={String(dashboard.upcomingOccasions.length)}
-                  tone="white"
-                />
+                <StatCard label="People tracked" value={String(dashboard.people.length)} tone="cream" />
+                <StatCard label="Occasions captured" value={String(totalOccasions(dashboard.people))} tone="white" />
                 <StatCard
                   label="Gift ideas saved"
                   value={String(totalGiftIdeas(dashboard.people))}
@@ -310,65 +609,41 @@ export function DashboardShell({
               </div>
             </div>
 
-            <div className="rounded-[1.75rem] bg-[#2f241d] p-6 text-[#f8ede0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <p className="text-sm uppercase tracking-[0.25em] text-[#d9bca5]">
-                Connection
-              </p>
+            <div className="rounded-[1.8rem] bg-[#2f241d] p-5 text-[#f8ede0] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-6">
+              <p className="text-sm uppercase tracking-[0.25em] text-[#d9bca5]">Studio controls</p>
               <div className="mt-4 space-y-4">
-                <div className="rounded-2xl bg-black/20 p-4">
-                  <p className="text-sm text-[#d9bca5]">Signed in as</p>
-                  <p className="mt-2 text-sm font-medium">{currentUser.name}</p>
+                <InfoTile label="Signed in as">
+                  <p className="text-sm font-medium">{currentUser.name}</p>
                   <p className="mt-1 text-sm text-[#d9bca5]">{currentUser.email}</p>
-                </div>
-                <div className="rounded-2xl bg-black/20 p-4">
-                  <p className="text-sm text-[#d9bca5]">API base URL</p>
-                  <p className="mt-2 break-all text-sm">{apiBaseUrl}</p>
-                </div>
-                <div className="rounded-2xl bg-black/20 p-4">
-                  <p className="text-sm text-[#d9bca5]">Status</p>
-                  <p className="mt-2 text-sm">
+                </InfoTile>
+                <InfoTile label="API base URL">
+                  <p className="break-all text-sm">{apiBaseUrl}</p>
+                </InfoTile>
+                <InfoTile label="Status">
+                  <p className="text-sm">
                     {loading
                       ? "Loading dashboard data..."
                       : error
                         ? "Connection needs attention"
-                        : "Live data connected"}
+                        : "Everything is connected"}
                   </p>
+                </InfoTile>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <StudioButton
+                    onClick={() => {
+                      setLoading(true);
+                      void loadDashboard();
+                    }}
+                    light
+                  >
+                    Refresh data
+                  </StudioButton>
+                  <StudioButton onClick={onLogout}>Log out</StudioButton>
+                  <StudioButton onClick={handleQueueReminders}>Queue reminders</StudioButton>
+                  <StudioButton onClick={handleProcessReminders}>Process reminders</StudioButton>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoading(true);
-                    void loadDashboard();
-                  }}
-                  className="inline-flex rounded-full bg-[#f8ede0] px-4 py-2 text-sm font-medium text-[#2f241d] transition hover:bg-white"
-                >
-                  Refresh data
-                </button>
-                <button
-                  type="button"
-                  onClick={handleQueueReminders}
-                  className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
-                >
-                  Queue today&apos;s reminders
-                </button>
-                <button
-                  type="button"
-                  onClick={handleProcessReminders}
-                  className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
-                >
-                  Process queued reminders
-                </button>
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="inline-flex rounded-full border border-white/20 px-4 py-2 text-sm font-medium text-[#f8ede0] transition hover:bg-white/10"
-                >
-                  Log out
-                </button>
-                {queueError ? <p className="text-sm text-[#f4b9a2]">{queueError}</p> : null}
-                {queueSuccess ? <p className="text-sm text-[#d4f0da]">{queueSuccess}</p> : null}
-                {processError ? <p className="text-sm text-[#f4b9a2]">{processError}</p> : null}
-                {processSuccess ? <p className="text-sm text-[#d4f0da]">{processSuccess}</p> : null}
+                <StatusMessage error={queueError} success={queueSuccess} />
+                <StatusMessage error={processError} success={processSuccess} />
               </div>
             </div>
           </div>
@@ -383,7 +658,7 @@ export function DashboardShell({
           </section>
         ) : null}
 
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
             <Panel
               eyebrow="Reminder runway"
@@ -402,6 +677,66 @@ export function DashboardShell({
                 <EmptyState
                   title="No reminders due soon"
                   description="As your occasion dates get closer, this queue will show which people need your attention next."
+                />
+              )}
+            </Panel>
+
+            <Panel
+              eyebrow="Soonest moments"
+              title="Upcoming occasions"
+              description="Edit a date directly from the timeline, or use it to jump into the management studio."
+            >
+              {loading ? (
+                <LoadingGrid />
+              ) : dashboard.upcomingOccasions.length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {dashboard.upcomingOccasions.map((occasion) => (
+                    <OccasionCard
+                      key={occasion.id}
+                      occasion={occasion}
+                      active={editorTarget?.type === "occasion" && editorTarget.id === occasion.id}
+                      onEdit={() => openOccasionEditor(occasion)}
+                      onDelete={() => openOccasionDelete(occasion)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No upcoming occasions yet"
+                  description="Add a person and their birthday or special day to start building your reminder pipeline."
+                />
+              )}
+            </Panel>
+
+            <Panel
+              eyebrow="People"
+              title="Gift circle"
+              description="This is your working roster. Each person card now supports edits, protected delete flows, and quick access to their dates and gift ideas."
+            >
+              {loading ? (
+                <LoadingList />
+              ) : dashboard.people.length > 0 ? (
+                <div className="grid gap-4">
+                  {dashboard.people.map((person) => (
+                    <PersonCard
+                      key={person.id}
+                      person={person}
+                      active={editorTarget?.type === "person" && editorTarget.id === person.id}
+                      activeOccasionId={editorTarget?.type === "occasion" ? editorTarget.id : null}
+                      activeGiftIdeaId={editorTarget?.type === "giftIdea" ? editorTarget.id : null}
+                      onEditPerson={() => openPersonEditor(person)}
+                      onDeletePerson={() => openPersonDelete(person)}
+                      onEditOccasion={openOccasionEditor}
+                      onDeleteOccasion={openOccasionDelete}
+                      onEditGiftIdea={openGiftIdeaEditor}
+                      onDeleteGiftIdea={openGiftIdeaDelete}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No people tracked yet"
+                  description="Use the quick-add form to seed your first person and start the gifting workflow."
                 />
               )}
             </Panel>
@@ -426,55 +761,281 @@ export function DashboardShell({
                 />
               )}
             </Panel>
-
-            <Panel
-              eyebrow="Soonest moments"
-              title="Upcoming occasions"
-              description="These are the dates that are closest to needing a gift decision."
-            >
-              {loading ? (
-                <LoadingGrid />
-              ) : dashboard.upcomingOccasions.length > 0 ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {dashboard.upcomingOccasions.map((occasion) => (
-                    <OccasionCard key={occasion.id} occasion={occasion} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  title="No upcoming occasions yet"
-                  description="Add a person and their birthday or special day to start building your reminder pipeline."
-                />
-              )}
-            </Panel>
-
-            <Panel
-              eyebrow="People"
-              title="Gift circle"
-              description="A quick snapshot of who you are tracking and how much context you already have."
-            >
-              {loading ? (
-                <LoadingList />
-              ) : dashboard.people.length > 0 ? (
-                <div className="grid gap-4">
-                  {dashboard.people.map((person) => (
-                    <PersonCard key={person.id} person={person} />
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  title="No people tracked yet"
-                  description="Use the quick-add form to seed your first person and start the gifting workflow."
-                />
-              )}
-            </Panel>
           </div>
 
           <div className="space-y-6">
             <Panel
+              eyebrow="Manage records"
+              title="Edit and delete studio"
+              description="Select any person, occasion, or gift idea from the dashboard to refine it here."
+            >
+              {editorTarget?.type === "person" && selectedPerson ? (
+                <form className="space-y-4" onSubmit={handlePersonUpdate}>
+                  <StudioHeader
+                    label="Editing person"
+                    title={selectedPerson.name}
+                    onCancel={resetStudio}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Name"
+                      value={personEditForm.name}
+                      onChange={(value) =>
+                        setPersonEditForm((current) => ({ ...current, name: value }))
+                      }
+                      placeholder="Jamie Rivera"
+                      required
+                    />
+                    <Field
+                      label="Email"
+                      value={personEditForm.email}
+                      onChange={(value) =>
+                        setPersonEditForm((current) => ({ ...current, email: value }))
+                      }
+                      placeholder="jamie@example.com"
+                      type="email"
+                    />
+                  </div>
+                  <Field
+                    label="Relationship"
+                    value={personEditForm.relationship}
+                    onChange={(value) =>
+                      setPersonEditForm((current) => ({ ...current, relationship: value }))
+                    }
+                    placeholder="Friend, sibling, partner"
+                  />
+                  <Field
+                    label="Interests"
+                    value={personEditForm.interests}
+                    onChange={(value) =>
+                      setPersonEditForm((current) => ({ ...current, interests: value }))
+                    }
+                    placeholder="Books, coffee, skincare"
+                  />
+                  <TextAreaField
+                    label="Notes"
+                    value={personEditForm.notes}
+                    onChange={(value) =>
+                      setPersonEditForm((current) => ({ ...current, notes: value }))
+                    }
+                    placeholder="Useful details for future gifting decisions."
+                  />
+                  <StatusMessage error={editorError} success={editorSuccess} />
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <PrimaryButton type="submit" disabled={isPending}>
+                      {isPending ? "Saving person..." : "Save person"}
+                    </PrimaryButton>
+                    <SecondaryButton type="button" onClick={resetStudio}>
+                      Cancel
+                    </SecondaryButton>
+                  </div>
+                </form>
+              ) : editorTarget?.type === "occasion" && selectedOccasion ? (
+                <form className="space-y-4" onSubmit={handleOccasionUpdate}>
+                  <StudioHeader
+                    label="Editing occasion"
+                    title={selectedOccasion.title}
+                    onCancel={resetStudio}
+                  />
+                  <SelectField
+                    label="Person"
+                    value={String(occasionEditForm.person_id)}
+                    onChange={(value) =>
+                      setOccasionEditForm((current) => ({
+                        ...current,
+                        person_id: Number(value),
+                      }))
+                    }
+                    options={dashboard.people.map((person) => ({
+                      value: String(person.id),
+                      label: person.name,
+                    }))}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <SelectField
+                      label="Occasion type"
+                      value={occasionEditForm.kind}
+                      onChange={(value) =>
+                        setOccasionEditForm((current) => ({ ...current, kind: value }))
+                      }
+                      options={occasionKinds}
+                    />
+                    <Field
+                      label="Date"
+                      value={occasionEditForm.date}
+                      onChange={(value) =>
+                        setOccasionEditForm((current) => ({ ...current, date: value }))
+                      }
+                      placeholder="2099-06-10"
+                      type="date"
+                      required
+                    />
+                  </div>
+                  <Field
+                    label="Title"
+                    value={occasionEditForm.title}
+                    onChange={(value) =>
+                      setOccasionEditForm((current) => ({ ...current, title: value }))
+                    }
+                    placeholder="Alex Birthday"
+                    required
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Reminder lead time"
+                      value={String(occasionEditForm.reminder_days_before)}
+                      onChange={(value) =>
+                        setOccasionEditForm((current) => ({
+                          ...current,
+                          reminder_days_before: Number(value || 0),
+                        }))
+                      }
+                      placeholder="14"
+                      type="number"
+                      required
+                    />
+                    <ToggleField
+                      label="Enable reminder"
+                      checked={occasionEditForm.reminder_enabled}
+                      onChange={(checked) =>
+                        setOccasionEditForm((current) => ({
+                          ...current,
+                          reminder_enabled: checked,
+                        }))
+                      }
+                    />
+                  </div>
+                  <ToggleField
+                    label="Repeat this occasion every year"
+                    checked={occasionEditForm.recurring_yearly}
+                    onChange={(checked) =>
+                      setOccasionEditForm((current) => ({
+                        ...current,
+                        recurring_yearly: checked,
+                      }))
+                    }
+                  />
+                  <StatusMessage error={editorError} success={editorSuccess} />
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <PrimaryButton type="submit" disabled={isPending}>
+                      {isPending ? "Saving occasion..." : "Save occasion"}
+                    </PrimaryButton>
+                    <SecondaryButton type="button" onClick={resetStudio}>
+                      Cancel
+                    </SecondaryButton>
+                  </div>
+                </form>
+              ) : editorTarget?.type === "giftIdea" && selectedGiftIdea ? (
+                <form className="space-y-4" onSubmit={handleGiftIdeaUpdate}>
+                  <StudioHeader
+                    label="Editing gift idea"
+                    title={selectedGiftIdea.title}
+                    onCancel={resetStudio}
+                  />
+                  <SelectField
+                    label="Person"
+                    value={String(giftIdeaEditForm.person_id)}
+                    onChange={(value) =>
+                      setGiftIdeaEditForm((current) => ({
+                        ...current,
+                        person_id: Number(value),
+                      }))
+                    }
+                    options={dashboard.people.map((person) => ({
+                      value: String(person.id),
+                      label: person.name,
+                    }))}
+                  />
+                  <Field
+                    label="Idea title"
+                    value={giftIdeaEditForm.title}
+                    onChange={(value) =>
+                      setGiftIdeaEditForm((current) => ({ ...current, title: value }))
+                    }
+                    placeholder="Weekend getaway voucher"
+                    required
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <SelectField
+                      label="Status"
+                      value={giftIdeaEditForm.status}
+                      onChange={(value) =>
+                        setGiftIdeaEditForm((current) => ({ ...current, status: value }))
+                      }
+                      options={giftIdeaStatuses}
+                    />
+                    <Field
+                      label="Price (USD)"
+                      value={
+                        giftIdeaEditForm.price_cents === null
+                          ? ""
+                          : String(giftIdeaEditForm.price_cents / 100)
+                      }
+                      onChange={(value) =>
+                        setGiftIdeaEditForm((current) => ({
+                          ...current,
+                          price_cents: value ? Math.round(Number(value) * 100) : null,
+                        }))
+                      }
+                      placeholder="120"
+                      type="number"
+                    />
+                  </div>
+                  <Field
+                    label="Link"
+                    value={giftIdeaEditForm.url}
+                    onChange={(value) =>
+                      setGiftIdeaEditForm((current) => ({ ...current, url: value }))
+                    }
+                    placeholder="https://example.com"
+                    type="url"
+                  />
+                  <TextAreaField
+                    label="Notes"
+                    value={giftIdeaEditForm.notes}
+                    onChange={(value) =>
+                      setGiftIdeaEditForm((current) => ({ ...current, notes: value }))
+                    }
+                    placeholder="Why this feels like a strong fit."
+                  />
+                  <StatusMessage error={editorError} success={editorSuccess} />
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <PrimaryButton type="submit" disabled={isPending}>
+                      {isPending ? "Saving idea..." : "Save gift idea"}
+                    </PrimaryButton>
+                    <SecondaryButton type="button" onClick={resetStudio}>
+                      Cancel
+                    </SecondaryButton>
+                  </div>
+                </form>
+              ) : deleteTarget ? (
+                <div className="space-y-4">
+                  <StudioHeader label="Delete confirmation" title={deleteTarget.title} onCancel={resetStudio} />
+                  <div className="rounded-[1.5rem] border border-[#e9c4b3] bg-[linear-gradient(135deg,#fff7ef,#fff0e6)] p-5 text-[#6b3b25]">
+                    <p className="text-sm leading-6">{deleteTarget.description}</p>
+                  </div>
+                  <StatusMessage error={deleteError} success={deleteSuccess} />
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <DangerButton type="button" disabled={isPending} onClick={handleConfirmDelete}>
+                      {isPending ? "Deleting..." : deleteTarget.confirmLabel}
+                    </DangerButton>
+                    <SecondaryButton type="button" onClick={resetStudio}>
+                      Cancel
+                    </SecondaryButton>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  title="Nothing selected yet"
+                  description="Tap edit on any person, occasion, or gift idea to refine it here. Delete actions also open in this protected studio."
+                />
+              )}
+            </Panel>
+
+            <Panel
               eyebrow="Quick add"
               title="Add a new person"
-              description="Keep this lightweight for now. We can expand it into a full profile editor after the dashboard feels right."
+              description="Keep the circle growing without leaving the dashboard."
             >
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -493,22 +1054,16 @@ export function DashboardShell({
                     type="email"
                   />
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field
-                    label="Relationship"
-                    value={formState.relationship}
-                    onChange={(value) =>
-                      setFormState((current) => ({ ...current, relationship: value }))
-                    }
-                    placeholder="Friend, cousin, partner"
-                  />
-                </div>
+                <Field
+                  label="Relationship"
+                  value={formState.relationship}
+                  onChange={(value) => setFormState((current) => ({ ...current, relationship: value }))}
+                  placeholder="Friend, cousin, partner"
+                />
                 <Field
                   label="Interests"
                   value={formState.interests}
-                  onChange={(value) =>
-                    setFormState((current) => ({ ...current, interests: value }))
-                  }
+                  onChange={(value) => setFormState((current) => ({ ...current, interests: value }))}
                   placeholder="Books, coffee, skincare"
                 />
                 <TextAreaField
@@ -517,17 +1072,10 @@ export function DashboardShell({
                   onChange={(value) => setFormState((current) => ({ ...current, notes: value }))}
                   placeholder="A few hints that will help future you pick better gifts."
                 />
-
-                {submitError ? <p className="text-sm text-[#a0401f]">{submitError}</p> : null}
-                {submitSuccess ? <p className="text-sm text-[#2a6b46]">{submitSuccess}</p> : null}
-
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="inline-flex w-full items-center justify-center rounded-full bg-[#b85c38] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#9f4d2d] disabled:cursor-not-allowed disabled:opacity-60"
-                >
+                <StatusMessage error={submitError} success={submitSuccess} />
+                <PrimaryButton type="submit" disabled={isPending}>
                   {isPending ? "Saving person..." : "Add person"}
-                </button>
+                </PrimaryButton>
               </form>
             </Panel>
 
@@ -561,9 +1109,7 @@ export function DashboardShell({
                   <Field
                     label="Date"
                     value={occasionForm.date}
-                    onChange={(value) =>
-                      setOccasionForm((current) => ({ ...current, date: value }))
-                    }
+                    onChange={(value) => setOccasionForm((current) => ({ ...current, date: value }))}
                     placeholder="2099-06-10"
                     type="date"
                     required
@@ -572,9 +1118,7 @@ export function DashboardShell({
                 <Field
                   label="Title"
                   value={occasionForm.title}
-                  onChange={(value) =>
-                    setOccasionForm((current) => ({ ...current, title: value }))
-                  }
+                  onChange={(value) => setOccasionForm((current) => ({ ...current, title: value }))}
                   placeholder="Alex Birthday"
                   required
                 />
@@ -592,44 +1136,31 @@ export function DashboardShell({
                     type="number"
                     required
                   />
-                  <label className="flex items-center gap-3 rounded-2xl bg-[#f8f0e4] px-4 py-3 text-sm text-[#5f4a3a] sm:mt-7">
-                    <input
-                      type="checkbox"
-                      checked={occasionForm.reminder_enabled}
-                      onChange={(event) =>
-                        setOccasionForm((current) => ({
-                          ...current,
-                          reminder_enabled: event.target.checked,
-                        }))
-                      }
-                    />
-                    Enable reminder
-                  </label>
-                </div>
-                <label className="flex items-center gap-3 rounded-2xl bg-[#f8f0e4] px-4 py-3 text-sm text-[#5f4a3a]">
-                  <input
-                    type="checkbox"
-                    checked={occasionForm.recurring_yearly}
-                    onChange={(event) =>
+                  <ToggleField
+                    label="Enable reminder"
+                    checked={occasionForm.reminder_enabled}
+                    onChange={(checked) =>
                       setOccasionForm((current) => ({
                         ...current,
-                        recurring_yearly: event.target.checked,
+                        reminder_enabled: checked,
                       }))
                     }
                   />
-                  Repeat this occasion every year
-                </label>
-
-                {occasionError ? <p className="text-sm text-[#a0401f]">{occasionError}</p> : null}
-                {occasionSuccess ? <p className="text-sm text-[#2a6b46]">{occasionSuccess}</p> : null}
-
-                <button
-                  type="submit"
-                  disabled={isPending || dashboard.people.length === 0}
-                  className="inline-flex w-full items-center justify-center rounded-full bg-[#7c4a36] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#683c2b] disabled:cursor-not-allowed disabled:opacity-60"
-                >
+                </div>
+                <ToggleField
+                  label="Repeat this occasion every year"
+                  checked={occasionForm.recurring_yearly}
+                  onChange={(checked) =>
+                    setOccasionForm((current) => ({
+                      ...current,
+                      recurring_yearly: checked,
+                    }))
+                  }
+                />
+                <StatusMessage error={occasionError} success={occasionSuccess} />
+                <PrimaryButton type="submit" disabled={isPending || dashboard.people.length === 0}>
                   {isPending ? "Saving occasion..." : "Add occasion"}
-                </button>
+                </PrimaryButton>
               </form>
             </Panel>
 
@@ -654,9 +1185,7 @@ export function DashboardShell({
                 <Field
                   label="Idea title"
                   value={giftIdeaForm.title}
-                  onChange={(value) =>
-                    setGiftIdeaForm((current) => ({ ...current, title: value }))
-                  }
+                  onChange={(value) => setGiftIdeaForm((current) => ({ ...current, title: value }))}
                   placeholder="Weekend getaway voucher"
                   required
                 />
@@ -664,17 +1193,13 @@ export function DashboardShell({
                   <SelectField
                     label="Status"
                     value={giftIdeaForm.status}
-                    onChange={(value) =>
-                      setGiftIdeaForm((current) => ({ ...current, status: value }))
-                    }
+                    onChange={(value) => setGiftIdeaForm((current) => ({ ...current, status: value }))}
                     options={giftIdeaStatuses}
                   />
                   <Field
                     label="Price (USD)"
                     value={
-                      giftIdeaForm.price_cents === null
-                        ? ""
-                        : String(giftIdeaForm.price_cents / 100)
+                      giftIdeaForm.price_cents === null ? "" : String(giftIdeaForm.price_cents / 100)
                     }
                     onChange={(value) =>
                       setGiftIdeaForm((current) => ({
@@ -696,22 +1221,13 @@ export function DashboardShell({
                 <TextAreaField
                   label="Notes"
                   value={giftIdeaForm.notes}
-                  onChange={(value) =>
-                    setGiftIdeaForm((current) => ({ ...current, notes: value }))
-                  }
+                  onChange={(value) => setGiftIdeaForm((current) => ({ ...current, notes: value }))}
                   placeholder="Why this feels like a good fit."
                 />
-
-                {giftIdeaError ? <p className="text-sm text-[#a0401f]">{giftIdeaError}</p> : null}
-                {giftIdeaSuccess ? <p className="text-sm text-[#2a6b46]">{giftIdeaSuccess}</p> : null}
-
-                <button
-                  type="submit"
-                  disabled={isPending || dashboard.people.length === 0}
-                  className="inline-flex w-full items-center justify-center rounded-full bg-[#2f241d] px-5 py-3 text-sm font-semibold text-[#f8ede0] transition hover:bg-[#231912] disabled:cursor-not-allowed disabled:opacity-60"
-                >
+                <StatusMessage error={giftIdeaError} success={giftIdeaSuccess} />
+                <PrimaryButton type="submit" disabled={isPending || dashboard.people.length === 0}>
                   {isPending ? "Saving idea..." : "Save gift idea"}
-                </button>
+                </PrimaryButton>
               </form>
             </Panel>
           </div>
@@ -733,12 +1249,43 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[1.75rem] border border-black/5 bg-card px-5 py-5 shadow-[0_24px_70px_rgba(83,55,32,0.08)] sm:px-6 sm:py-6">
+    <section className="rounded-[1.8rem] border border-white/60 bg-[linear-gradient(180deg,rgba(255,251,246,0.98),rgba(255,247,239,0.92))] px-5 py-5 shadow-[0_24px_70px_rgba(83,55,32,0.08)] sm:px-6 sm:py-6">
       <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">{eyebrow}</p>
-      <h2 className="mt-3 text-2xl font-semibold">{title}</h2>
+      <h2 className="mt-3 text-2xl font-semibold text-[#2b221b]">{title}</h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{description}</p>
       <div className="mt-5">{children}</div>
     </section>
+  );
+}
+
+function InfoTile({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/20 p-4">
+      <p className="text-sm text-[#d9bca5]">{label}</p>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function StudioHeader({
+  label,
+  title,
+  onCancel,
+}: {
+  label: string;
+  title: string;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent">{label}</p>
+        <h3 className="mt-2 text-xl font-semibold text-[#2b221b]">{title}</h3>
+      </div>
+      <SecondaryButton type="button" onClick={onCancel}>
+        Close
+      </SecondaryButton>
+    </div>
   );
 }
 
@@ -758,10 +1305,10 @@ function StatCard({
       ? "bg-[#2f241d] text-[#f8ede0]"
       : tone === "white"
         ? "bg-white text-foreground"
-        : "bg-[#fff4e8] text-foreground";
+        : "bg-[#fff2e4] text-foreground";
 
   return (
-    <div className={`rounded-[1.35rem] px-4 py-4 shadow-[0_14px_35px_rgba(83,55,32,0.08)] ${toneClassName}`}>
+    <div className={`rounded-[1.4rem] px-4 py-4 shadow-[0_14px_35px_rgba(83,55,32,0.08)] ${toneClassName}`}>
       <p className="text-sm opacity-75">{label}</p>
       <p className="mt-3 text-3xl font-semibold">{value}</p>
       {detail ? <p className="mt-2 text-sm opacity-75">{detail}</p> : null}
@@ -769,49 +1316,95 @@ function StatCard({
   );
 }
 
-function OccasionCard({ occasion }: { occasion: Occasion }) {
+function OccasionCard({
+  occasion,
+  active,
+  onEdit,
+  onDelete,
+}: {
+  occasion: Occasion;
+  active: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
-    <article className="rounded-[1.4rem] border border-black/6 bg-[#fff7ef] p-4 shadow-[0_12px_30px_rgba(83,55,32,0.06)]">
-      <div className="flex items-start justify-between gap-4">
+    <article
+      className={`rounded-[1.5rem] border p-4 shadow-[0_12px_30px_rgba(83,55,32,0.06)] transition ${
+        active
+          ? "border-[#cc825f] bg-[linear-gradient(135deg,#fff3e8,#ffe9d8)]"
+          : "border-black/6 bg-[#fff7ef]"
+      }`}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            {occasion.kind}
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">{occasion.kind}</p>
           <h3 className="mt-2 text-lg font-semibold">{occasion.title}</h3>
           <p className="mt-1 text-sm text-muted">{occasion.person_name}</p>
           <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-[#9f5f3e]">
             {reminderLabel(occasion)}
           </p>
         </div>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#8b5b42]">
-          {formatOccasionDate(occasion.date)}
-        </span>
+        <div className="flex flex-col items-start gap-3 sm:items-end">
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[#8b5b42]">
+            {formatOccasionDate(occasion.date)}
+          </span>
+          <ActionRow onEdit={onEdit} onDelete={onDelete} />
+        </div>
       </div>
     </article>
   );
 }
 
-function PersonCard({ person }: { person: Person }) {
+function PersonCard({
+  person,
+  active,
+  activeOccasionId,
+  activeGiftIdeaId,
+  onEditPerson,
+  onDeletePerson,
+  onEditOccasion,
+  onDeleteOccasion,
+  onEditGiftIdea,
+  onDeleteGiftIdea,
+}: {
+  person: Person;
+  active: boolean;
+  activeOccasionId: number | null;
+  activeGiftIdeaId: number | null;
+  onEditPerson: () => void;
+  onDeletePerson: () => void;
+  onEditOccasion: (occasion: Occasion) => void;
+  onDeleteOccasion: (occasion: Occasion) => void;
+  onEditGiftIdea: (giftIdea: GiftIdea) => void;
+  onDeleteGiftIdea: (giftIdea: GiftIdea) => void;
+}) {
   const tags = interestTags(person.interests);
 
   return (
-    <article className="rounded-[1.4rem] border border-black/6 bg-white p-5 shadow-[0_12px_30px_rgba(83,55,32,0.06)]">
+    <article
+      className={`rounded-[1.5rem] border p-5 shadow-[0_14px_30px_rgba(83,55,32,0.07)] transition ${
+        active ? "border-[#cc825f] bg-[#fff7ef]" : "border-black/6 bg-white"
+      }`}
+    >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+        <div className="space-y-2">
           <h3 className="text-xl font-semibold">{person.name}</h3>
-          <p className="mt-1 text-sm text-muted">{person.relationship || "Relationship not set"}</p>
-          <p className="mt-2 text-sm text-muted">{person.email || "No reminder email set"}</p>
-          {person.notes ? <p className="mt-3 text-sm leading-6 text-muted">{person.notes}</p> : null}
+          <p className="text-sm text-muted">{person.relationship || "Relationship not set"}</p>
+          <p className="text-sm text-muted">{person.email || "No reminder email set"}</p>
+          {person.notes ? <p className="max-w-2xl text-sm leading-6 text-muted">{person.notes}</p> : null}
         </div>
-        <div className="grid min-w-[160px] gap-2 rounded-[1.2rem] bg-[#f8f0e4] p-3 text-sm text-[#5f4a3a]">
-          <div className="flex items-center justify-between gap-3">
-            <span>Occasions</span>
-            <strong>{person.occasions.length}</strong>
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[210px]">
+          <div className="grid gap-2 rounded-[1.2rem] bg-[#f8f0e4] p-3 text-sm text-[#5f4a3a]">
+            <div className="flex items-center justify-between gap-3">
+              <span>Occasions</span>
+              <strong>{person.occasions.length}</strong>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Gift ideas</span>
+              <strong>{person.gift_ideas.length}</strong>
+            </div>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>Gift ideas</span>
-            <strong>{person.gift_ideas.length}</strong>
-          </div>
+          <ActionRow onEdit={onEditPerson} onDelete={onDeletePerson} />
         </div>
       </div>
 
@@ -828,38 +1421,107 @@ function PersonCard({ person }: { person: Person }) {
         </div>
       ) : null}
 
-      {person.gift_ideas.length > 0 ? (
-        <div className="mt-4 grid gap-2">
-          {person.gift_ideas.slice(0, 2).map((giftIdea) => (
-            <div
-              key={giftIdea.id}
-              className="flex items-center justify-between rounded-2xl bg-[#fbf7f2] px-4 py-3 text-sm"
-            >
-              <div>
-                <p className="font-medium">{giftIdea.title}</p>
-                <p className="text-muted">{giftIdea.status}</p>
-              </div>
-              {giftIdea.price_cents ? (
-                <span className="font-medium text-[#704933]">
-                  ${(giftIdea.price_cents / 100).toFixed(0)}
-                </span>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <SubSection title="Occasions">
+          {person.occasions.length > 0 ? (
+            person.occasions.map((occasion) => (
+              <MiniRecord
+                key={occasion.id}
+                active={activeOccasionId === occasion.id}
+                title={occasion.title}
+                subtitle={`${occasion.kind} • ${formatOccasionDate(occasion.date)}`}
+                meta={reminderLabel(occasion)}
+                onEdit={() => onEditOccasion(occasion)}
+                onDelete={() => onDeleteOccasion(occasion)}
+              />
+            ))
+          ) : (
+            <EmptyMiniState text="No occasions yet" />
+          )}
+        </SubSection>
+
+        <SubSection title="Gift ideas">
+          {person.gift_ideas.length > 0 ? (
+            person.gift_ideas.map((giftIdea) => (
+              <MiniRecord
+                key={giftIdea.id}
+                active={activeGiftIdeaId === giftIdea.id}
+                title={giftIdea.title}
+                subtitle={giftIdea.status}
+                meta={
+                  giftIdea.price_cents ? `$${(giftIdea.price_cents / 100).toFixed(0)}` : "No price yet"
+                }
+                onEdit={() => onEditGiftIdea(giftIdea)}
+                onDelete={() => onDeleteGiftIdea(giftIdea)}
+              />
+            ))
+          ) : (
+            <EmptyMiniState text="No gift ideas yet" />
+          )}
+        </SubSection>
+      </div>
     </article>
+  );
+}
+
+function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-[1.3rem] border border-[#eee2d4] bg-[#fbf7f2] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-[#7d5845]">{title}</h4>
+      </div>
+      <div className="mt-3 grid gap-2">{children}</div>
+    </section>
+  );
+}
+
+function MiniRecord({
+  title,
+  subtitle,
+  meta,
+  active,
+  onEdit,
+  onDelete,
+}: {
+  title: string;
+  subtitle: string;
+  meta: string;
+  active: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={`rounded-[1.1rem] border px-3 py-3 transition ${
+        active ? "border-[#cc825f] bg-[#fff3e8]" : "border-[#eee2d4] bg-white"
+      }`}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="font-medium text-[#2b221b]">{title}</p>
+          <p className="mt-1 text-sm text-muted">{subtitle}</p>
+          <p className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-[#9a6548]">{meta}</p>
+        </div>
+        <ActionRow compact onEdit={onEdit} onDelete={onDelete} />
+      </div>
+    </div>
+  );
+}
+
+function EmptyMiniState({ text }: { text: string }) {
+  return (
+    <div className="rounded-[1.1rem] border border-dashed border-[#dbc7b8] bg-[#fffaf6] px-4 py-4 text-sm text-muted">
+      {text}
+    </div>
   );
 }
 
 function ReminderCard({ reminder }: { reminder: ReminderFeedItem }) {
   return (
     <article className="rounded-[1.4rem] border border-[#e4c6b0] bg-[linear-gradient(135deg,#fff7ef,#fff1e5)] p-4 shadow-[0_12px_30px_rgba(83,55,32,0.06)]">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
-            reminder
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">reminder</p>
           <h3 className="mt-2 text-lg font-semibold">{reminder.title}</h3>
           <p className="mt-1 text-sm text-muted">{reminder.person_name}</p>
         </div>
@@ -884,7 +1546,7 @@ function ReminderCard({ reminder }: { reminder: ReminderFeedItem }) {
 function ReminderActivityCard({ notification }: { notification: ReminderNotification }) {
   return (
     <article className="rounded-[1.4rem] border border-black/6 bg-white p-4 shadow-[0_12px_30px_rgba(83,55,32,0.06)]">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
             {notification.status}
@@ -913,6 +1575,37 @@ function ReminderActivityCard({ notification }: { notification: ReminderNotifica
         <p className="mt-3 text-sm text-[#a0401f]">{notification.error_message}</p>
       ) : null}
     </article>
+  );
+}
+
+function ActionRow({
+  onEdit,
+  onDelete,
+  compact = false,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  compact?: boolean;
+}) {
+  const sizeClass = compact ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm";
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={onEdit}
+        className={`inline-flex items-center justify-center rounded-full border border-[#dfc4b0] bg-white text-[#7c4a36] transition hover:border-[#c57b58] hover:bg-[#fff4ea] ${sizeClass}`}
+      >
+        Edit
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        className={`inline-flex items-center justify-center rounded-full border border-[#efc1b2] bg-[#fff4ef] text-[#a14725] transition hover:border-[#db8e73] hover:bg-[#ffe7dd] ${sizeClass}`}
+      >
+        Delete
+      </button>
+    </div>
   );
 }
 
@@ -1003,6 +1696,23 @@ function TextAreaField({
   );
 }
 
+function ToggleField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex items-center gap-3 rounded-2xl border border-[#e9dacd] bg-[#fffaf5] px-4 py-3 text-sm text-[#5f4a3a]">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>{label}</span>
+    </label>
+  );
+}
+
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
     <div className="rounded-[1.4rem] border border-dashed border-[#dbb89c] bg-[#fff9f2] px-5 py-8 text-center">
@@ -1012,13 +1722,101 @@ function EmptyState({ title, description }: { title: string; description: string
   );
 }
 
+function StatusMessage({
+  error,
+  success,
+}: {
+  error: string | null;
+  success: string | null;
+}) {
+  if (!error && !success) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2">
+      {error ? (
+        <p className="rounded-2xl border border-[#efc1b2] bg-[#fff3ee] px-4 py-3 text-sm text-[#a0401f]">
+          {error}
+        </p>
+      ) : null}
+      {success ? (
+        <p className="rounded-2xl border border-[#cfe3d4] bg-[#eff8f1] px-4 py-3 text-sm text-[#2a6b46]">
+          {success}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function PrimaryButton({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex w-full items-center justify-center rounded-full bg-[#b85c38] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#9f4d2d] disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SecondaryButton({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex w-full items-center justify-center rounded-full border border-[#ddc6b2] bg-white px-5 py-3 text-sm font-semibold text-[#6e4d39] transition hover:bg-[#fff7ef] disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DangerButton({
+  children,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex w-full items-center justify-center rounded-full bg-[#a84a2a] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#8f3d21] disabled:cursor-not-allowed disabled:opacity-60 ${props.className ?? ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StudioButton({
+  children,
+  light = false,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { light?: boolean }) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition ${
+        light
+          ? "bg-[#f8ede0] text-[#2f241d] hover:bg-white"
+          : "border border-white/20 text-[#f8ede0] hover:bg-white/10"
+      } ${props.className ?? ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function LoadingGrid() {
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {Array.from({ length: 4 }).map((_, index) => (
         <div
           key={index}
-          className="h-32 animate-pulse rounded-[1.4rem] bg-[linear-gradient(90deg,#f4eadf,#fff7ef,#f4eadf)]"
+          className="h-36 animate-pulse rounded-[1.4rem] bg-[linear-gradient(90deg,#f4eadf,#fff7ef,#f4eadf)]"
         />
       ))}
     </div>
@@ -1031,7 +1829,7 @@ function LoadingList() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div
           key={index}
-          className="h-36 animate-pulse rounded-[1.4rem] bg-[linear-gradient(90deg,#f4eadf,#fff7ef,#f4eadf)]"
+          className="h-40 animate-pulse rounded-[1.4rem] bg-[linear-gradient(90deg,#f4eadf,#fff7ef,#f4eadf)]"
         />
       ))}
     </div>
