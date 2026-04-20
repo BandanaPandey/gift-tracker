@@ -27,4 +27,14 @@ class UserTest < ActiveSupport::TestCase
     assert_not user.valid?
     assert_includes user.errors[:email], "has already been taken"
   end
+
+  test "requires valid reminder preference values" do
+    user = users(:one)
+    user.default_reminder_days_before = -1
+    user.reminder_feed_window_days = 0
+
+    assert_not user.valid?
+    assert_includes user.errors[:default_reminder_days_before], "must be greater than or equal to 0"
+    assert_includes user.errors[:reminder_feed_window_days], "must be greater than or equal to 1"
+  end
 end

@@ -1,7 +1,7 @@
 module Api
   module V1
     class AuthController < ApplicationController
-      before_action :authenticate_user!, only: :me
+      before_action :authenticate_user!, only: %i[me update]
 
       def signup
         user = User.new(signup_params)
@@ -27,6 +27,14 @@ module Api
         render json: { user: user_payload(current_user) }
       end
 
+      def update
+        if current_user.update(update_params)
+          render json: { user: user_payload(current_user) }
+        else
+          render json: { errors: current_user.errors.full_messages }, status: :unprocessable_entity
+        end
+      end
+
       private
 
       def signup_params
@@ -35,6 +43,14 @@ module Api
 
       def login_params
         params.require(:session).permit(:email, :password)
+      end
+
+      def update_params
+        params.require(:user).permit(
+          :default_reminder_days_before,
+          :default_reminder_enabled,
+          :reminder_feed_window_days
+        )
       end
 
       def auth_payload(user)
@@ -48,7 +64,10 @@ module Api
         {
           id: user.id,
           name: user.name,
-          email: user.email
+          email: user.email,
+          default_reminder_days_before: user.default_reminder_days_before,
+          default_reminder_enabled: user.default_reminder_enabled,
+          reminder_feed_window_days: user.reminder_feed_window_days
         }
       end
     end

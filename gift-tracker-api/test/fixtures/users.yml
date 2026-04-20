@@ -2,8 +2,14 @@ one:
   name: Maya Carter
   email: maya@example.com
   password_digest: <%= BCrypt::Password.create("password123") %>
+  default_reminder_days_before: 14
+  default_reminder_enabled: true
+  reminder_feed_window_days: 60
 
 two:
   name: Leo Grant
   email: leo@example.com
   password_digest: <%= BCrypt::Password.create("password123") %>
+  default_reminder_days_before: 21
+  default_reminder_enabled: false
+  reminder_feed_window_days: 90

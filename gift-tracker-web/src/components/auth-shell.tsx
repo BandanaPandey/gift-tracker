@@ -66,6 +66,10 @@ export function AuthShell() {
     setSignUpForm(emptySignUpForm);
   }
 
+  function handleCurrentUserChange(nextUser: CurrentUser) {
+    setCurrentUser(nextUser);
+  }
+
   function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
@@ -108,7 +112,14 @@ export function AuthShell() {
   }
 
   if (token && currentUser) {
-    return <DashboardShell token={token} currentUser={currentUser} onLogout={handleLogout} />;
+    return (
+      <DashboardShell
+        token={token}
+        currentUser={currentUser}
+        onCurrentUserChange={handleCurrentUserChange}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   return (

@@ -11,6 +11,7 @@ Rails.application.routes.draw do
       post "auth/signup", to: "auth#signup"
       post "auth/login", to: "auth#login"
       get "auth/me", to: "auth#me"
+      patch "auth/me", to: "auth#update"
       get "occasions/upcoming", to: "occasions#upcoming"
       get "occasions/reminders", to: "occasions#reminders"
       get "reminder_notifications", to: "reminder_notifications#index"

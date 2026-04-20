@@ -12,6 +12,7 @@ import {
   getApiBaseUrl,
   processQueuedReminderNotifications,
   queueReminderNotifications,
+  updateReminderPreferences,
   type CreateGiftIdeaInput,
   type CreateOccasionInput,
   type CreatePersonInput,
@@ -174,10 +175,12 @@ function giftIdeaToForm(giftIdea: GiftIdea): CreateGiftIdeaInput {
 export function DashboardShell({
   token,
   currentUser,
+  onCurrentUserChange,
   onLogout,
 }: {
   token: string;
   currentUser: CurrentUser;
+  onCurrentUserChange: (user: CurrentUser) => void;
   onLogout: () => void;
 }) {
   const [dashboard, setDashboard] = useState<DashboardData>({
@@ -198,6 +201,8 @@ export function DashboardShell({
   const [queueSuccess, setQueueSuccess] = useState<string | null>(null);
   const [processError, setProcessError] = useState<string | null>(null);
   const [processSuccess, setProcessSuccess] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
   const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
@@ -205,11 +210,20 @@ export function DashboardShell({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<string | null>(null);
   const [formState, setFormState] = useState<CreatePersonInput>(emptyPersonForm);
-  const [occasionForm, setOccasionForm] = useState<CreateOccasionInput>(emptyOccasionForm);
+  const [occasionForm, setOccasionForm] = useState<CreateOccasionInput>({
+    ...emptyOccasionForm,
+    reminder_days_before: currentUser.default_reminder_days_before,
+    reminder_enabled: currentUser.default_reminder_enabled,
+  });
   const [giftIdeaForm, setGiftIdeaForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
   const [personEditForm, setPersonEditForm] = useState<CreatePersonInput>(emptyPersonForm);
   const [occasionEditForm, setOccasionEditForm] = useState<CreateOccasionInput>(emptyOccasionForm);
   const [giftIdeaEditForm, setGiftIdeaEditForm] = useState<CreateGiftIdeaInput>(emptyGiftIdeaForm);
+  const [settingsForm, setSettingsForm] = useState({
+    default_reminder_days_before: currentUser.default_reminder_days_before,
+    default_reminder_enabled: currentUser.default_reminder_enabled,
+    reminder_feed_window_days: currentUser.reminder_feed_window_days,
+  });
   const [isPending, startTransition] = useTransition();
 
   const apiBaseUrl = getApiBaseUrl();
@@ -217,14 +231,14 @@ export function DashboardShell({
   const loadDashboard = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchDashboardData(token);
+      const data = await fetchDashboardData(token, currentUser.reminder_feed_window_days);
       setDashboard(data);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load dashboard.");
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, currentUser.reminder_feed_window_days]);
 
   const allOccasions = useMemo(
     () =>
@@ -262,8 +276,29 @@ export function DashboardShell({
       : null;
 
   useEffect(() => {
+    setSettingsForm({
+      default_reminder_days_before: currentUser.default_reminder_days_before,
+      default_reminder_enabled: currentUser.default_reminder_enabled,
+      reminder_feed_window_days: currentUser.reminder_feed_window_days,
+    });
+    setOccasionForm((current) => ({
+      ...current,
+      reminder_days_before: current.title ? current.reminder_days_before : currentUser.default_reminder_days_before,
+      reminder_enabled: current.title ? current.reminder_enabled : currentUser.default_reminder_enabled,
+    }));
+  }, [
+    currentUser.default_reminder_days_before,
+    currentUser.default_reminder_enabled,
+    currentUser.reminder_feed_window_days,
+  ]);
+
+  useEffect(() => {
     if (dashboard.people.length === 0) {
-      setOccasionForm(emptyOccasionForm);
+      setOccasionForm({
+        ...emptyOccasionForm,
+        reminder_days_before: currentUser.default_reminder_days_before,
+        reminder_enabled: currentUser.default_reminder_enabled,
+      });
       setGiftIdeaForm(emptyGiftIdeaForm);
       return;
     }
@@ -276,7 +311,7 @@ export function DashboardShell({
       ...current,
       person_id: current.person_id || dashboard.people[0].id,
     }));
-  }, [dashboard.people]);
+  }, [dashboard.people, currentUser.default_reminder_days_before, currentUser.default_reminder_enabled]);
 
   useEffect(() => {
     void loadDashboard();
@@ -401,6 +436,8 @@ export function DashboardShell({
         setOccasionForm((current) => ({
           ...emptyOccasionForm,
           person_id: current.person_id,
+          reminder_days_before: currentUser.default_reminder_days_before,
+          reminder_enabled: currentUser.default_reminder_enabled,
         }));
         setOccasionSuccess("Occasion added to the calendar.");
         await loadDashboard();
@@ -471,6 +508,25 @@ export function DashboardShell({
       } catch (processErr) {
         setProcessError(
           processErr instanceof Error ? processErr.message : "Unable to process queued reminders."
+        );
+      }
+    });
+  }
+
+  function handleSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSettingsError(null);
+    setSettingsSuccess(null);
+
+    startTransition(async () => {
+      try {
+        const response = await updateReminderPreferences(token, settingsForm);
+        onCurrentUserChange(response.user);
+        setSettingsSuccess("Reminder defaults updated.");
+        await loadDashboard();
+      } catch (settingsErr) {
+        setSettingsError(
+          settingsErr instanceof Error ? settingsErr.message : "Unable to update reminder defaults.",
         );
       }
     });
@@ -1030,6 +1086,57 @@ export function DashboardShell({
                   description="Tap edit on any person, occasion, or gift idea to refine it here. Delete actions also open in this protected studio."
                 />
               )}
+            </Panel>
+
+            <Panel
+              eyebrow="Reminder defaults"
+              title="Reminder settings"
+              description="These defaults shape future occasions and control how far ahead the dashboard watches for reminder moments."
+            >
+              <form className="space-y-4" onSubmit={handleSettingsSubmit}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    label="Default reminder lead time"
+                    value={String(settingsForm.default_reminder_days_before)}
+                    onChange={(value) =>
+                      setSettingsForm((current) => ({
+                        ...current,
+                        default_reminder_days_before: Number(value || 0),
+                      }))
+                    }
+                    placeholder="14"
+                    type="number"
+                    required
+                  />
+                  <Field
+                    label="Reminder feed window"
+                    value={String(settingsForm.reminder_feed_window_days)}
+                    onChange={(value) =>
+                      setSettingsForm((current) => ({
+                        ...current,
+                        reminder_feed_window_days: Number(value || 1),
+                      }))
+                    }
+                    placeholder="60"
+                    type="number"
+                    required
+                  />
+                </div>
+                <ToggleField
+                  label="Enable reminders by default"
+                  checked={settingsForm.default_reminder_enabled}
+                  onChange={(checked) =>
+                    setSettingsForm((current) => ({
+                      ...current,
+                      default_reminder_enabled: checked,
+                    }))
+                  }
+                />
+                <StatusMessage error={settingsError} success={settingsSuccess} />
+                <PrimaryButton type="submit" disabled={isPending}>
+                  {isPending ? "Saving defaults..." : "Save reminder defaults"}
+                </PrimaryButton>
+              </form>
             </Panel>
 
             <Panel

@@ -35,6 +35,9 @@ export type CurrentUser = {
   id: number;
   name: string;
   email: string;
+  default_reminder_days_before: number;
+  default_reminder_enabled: boolean;
+  reminder_feed_window_days: number;
 };
 
 export type AuthResponse = {
@@ -128,7 +131,10 @@ async function parseJson<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function fetchDashboardData(token: string): Promise<DashboardData> {
+export async function fetchDashboardData(
+  token: string,
+  reminderFeedWindowDays: number,
+): Promise<DashboardData> {
   const apiBaseUrl = getApiBaseUrl();
   const [people, upcomingOccasions, reminderFeed, reminderActivity] = await Promise.all([
     fetch(`${apiBaseUrl}/api/v1/people`, { cache: "no-store", headers: authHeaders(token) }).then((response) =>
@@ -138,7 +144,7 @@ export async function fetchDashboardData(token: string): Promise<DashboardData> 
       cache: "no-store",
       headers: authHeaders(token),
     }).then((response) => parseJson<Occasion[]>(response)),
-    fetch(`${apiBaseUrl}/api/v1/occasions/reminders?window_days=60`, {
+    fetch(`${apiBaseUrl}/api/v1/occasions/reminders?window_days=${reminderFeedWindowDays}`, {
       cache: "no-store",
       headers: authHeaders(token),
     }).then((response) => parseJson<ReminderFeedItem[]>(response)),
@@ -341,5 +347,24 @@ export async function fetchCurrentUser(token: string) {
   return fetch(`${apiBaseUrl}/api/v1/auth/me`, {
     headers: authHeaders(token),
     cache: "no-store",
+  }).then((response) => parseJson<{ user: CurrentUser }>(response));
+}
+
+export async function updateReminderPreferences(
+  token: string,
+  input: Pick<
+    CurrentUser,
+    "default_reminder_days_before" | "default_reminder_enabled" | "reminder_feed_window_days"
+  >,
+) {
+  const apiBaseUrl = getApiBaseUrl();
+
+  return fetch(`${apiBaseUrl}/api/v1/auth/me`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ user: input }),
   }).then((response) => parseJson<{ user: CurrentUser }>(response));
 }
