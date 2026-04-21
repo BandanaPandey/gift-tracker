@@ -1,16 +1,17 @@
 # Gift Tracker
 
-This repository is split into two apps so the frontend and backend can be deployed independently:
+This repository is split into two deployable apps:
 
-- `gift-tracker-web/` - Next.js web app
+- `gift-tracker-web/` - Next.js frontend
 - `gift-tracker-api/` - Ruby on Rails API
 
-The recommended free hobby setup is:
+The recommended hobby path is:
 
-- `gift-tracker-web` on `Vercel Hobby`
-- `gift-tracker-api` on `Render Web Service`
-- `PostgreSQL` on `Render Postgres`
-- reminder scheduling via a `Render cron job` that runs the existing Rails task
+- frontend on `Vercel Hobby`
+- API on `Render Web Service`
+- database on `Render Postgres`
+
+This keeps the frontend and backend independently deployable and matches the way the app already works locally.
 
 ## Local setup
 
@@ -24,8 +25,7 @@ bin/rails db:prepare
 bin/rails server -p 3001
 ```
 
-To test reminder emails locally, keep `ACTION_MAILER_DELIVERY_METHOD=test` and use the dashboard to queue/process reminders.
-For a real SMTP provider later, set `SMTP_ADDRESS`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `MAILER_FROM_EMAIL`.
+To test reminder emails locally, keep `ACTION_MAILER_DELIVERY_METHOD=test` and use the dashboard to queue and process reminders manually.
 
 ### Web app
 
@@ -41,18 +41,20 @@ npm run dev
 - Rails health check: `GET /up`
 - Versioned API health check: `GET /api/v1/health`
 
-## Hobby deployment guide
+## Free hobby deployment guide
 
 ### 1. Deploy the Rails API to Render
 
-Create a new `Web Service` in Render and point it to `gift-tracker-api`.
+Create a new `Web Service` in Render and point it at this repository.
 
-Suggested settings:
+The repository now includes a starter Render blueprint at [render.yaml](/Users/Bandana/work/AI/codex/gift-tracker/render.yaml) if you want Render to prefill the API service and Postgres for you.
 
-- Runtime: `Ruby`
+Recommended service settings:
+
+- Environment: `Ruby`
 - Root directory: `gift-tracker-api`
 - Build command: `bundle install`
-- Start command: `bundle exec rails server`
+- Start command: `bundle exec rails db:prepare && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}`
 
 Required environment variables:
 
@@ -69,7 +71,7 @@ Required environment variables:
 - `SMTP_ENABLE_STARTTLS_AUTO`
 - `RAILS_LOG_LEVEL`
 
-Recommended values in hobby deployment:
+Recommended values:
 
 - `APP_PROTOCOL=https`
 - `RAILS_LOG_LEVEL=info`
@@ -78,54 +80,52 @@ Recommended values in hobby deployment:
 
 Notes:
 
-- `FRONTEND_APP_URL` also drives CORS. You can provide multiple origins as a comma-separated list if needed.
-- Render Postgres should provide the production `DATABASE_URL`.
-- The API will fail fast on boot in production if required env vars are missing.
+- `FRONTEND_APP_URL` drives production CORS and supports comma-separated origins if you later need multiple frontend URLs.
+- The Rails API now fails fast in production if required deployment env vars are missing.
+- Render can use the native Ruby runtime for this app; Docker is not required for the hobby path.
 
 ### 2. Create Render Postgres
 
-Create a free `Render Postgres` instance and attach or copy its `DATABASE_URL` into the Rails web service.
+Create a `Render Postgres` instance and connect its `DATABASE_URL` to the Rails web service.
 
-Deploy order:
+Recommended deploy order:
 
 1. create Postgres
 2. set backend env vars
-3. deploy backend
-4. confirm `/up` and `/api/v1/health` respond successfully
+3. deploy the Rails web service
+4. confirm `/up` and `/api/v1/health`
 
 ### 3. Deploy the Next.js app to Vercel
 
-Import `gift-tracker-web` into Vercel.
+Import the same repository into Vercel and configure it as the frontend project.
 
-Suggested settings:
+Recommended settings:
 
 - Framework preset: `Next.js`
 - Root directory: `gift-tracker-web`
 - Build command: `next build`
-- Output setting: default Next.js output
 
 Required environment variable:
 
 - `NEXT_PUBLIC_API_BASE_URL=https://<your-render-api-host>.onrender.com`
 
-After deployment:
+Recommended Node version:
 
-- confirm login/signup works against the public API
-- confirm the dashboard loads data from the deployed backend
+- `22.x`
 
-### 4. Set up reminder scheduling
+After deploy:
 
-The Rails app already owns scheduling and delivery. Use the existing task:
+- open the Vercel URL
+- create or log into an account
+- confirm dashboard requests are reaching the deployed Rails API
+
+## Reminder scheduling on hobby infrastructure
+
+The Rails app already exposes the scheduler entrypoint:
 
 ```bash
 cd gift-tracker-api
 bin/rails reminders:run_daily
-```
-
-In Render, create a scheduled cron job using the same environment as the Rails API service and run:
-
-```bash
-bundle exec rails reminders:run_daily
 ```
 
 This task:
@@ -133,34 +133,63 @@ This task:
 - queues reminders due for the target day
 - processes queued reminder emails immediately
 
-### 5. First deploy checklist
+### Fully free option
+
+If you want to stay completely free of cost, use the dashboard actions to queue and process reminders manually.
+
+### Optional Render cron job
+
+If you later choose to automate reminders on Render, create a cron job with:
+
+```bash
+bundle exec rails reminders:run_daily
+```
+
+Use the same environment variables as the Rails API service.
+
+## First deploy checklist
 
 - deploy the Rails API first
 - verify `/up`
 - verify `/api/v1/health`
-- deploy the Vercel frontend with the public API URL
-- verify auth flow from the browser
-- verify dashboard CRUD calls work cross-origin
-- verify one manual reminder queue/process cycle works
-- then enable the scheduled reminder job
+- deploy the Vercel frontend
+- set `NEXT_PUBLIC_API_BASE_URL`
+- verify signup/login
+- verify dashboard CRUD
+- verify queue/process reminder actions manually
+
+## Quickest path to live URLs
+
+1. In Render, create the Postgres database first.
+2. In Render, create the Rails web service from this repo or use the included blueprint.
+3. Set `FRONTEND_APP_URL` temporarily to your future Vercel domain or update it once Vercel gives you the real URL.
+4. Wait for the Rails deploy to finish and confirm:
+   - `https://<your-render-api-host>.onrender.com/up`
+   - `https://<your-render-api-host>.onrender.com/api/v1/health`
+5. In Vercel, import the same repo with root directory `gift-tracker-web`.
+6. Set `NEXT_PUBLIC_API_BASE_URL` to your Render API URL.
+7. Redeploy Vercel if needed after setting the API URL.
+8. Open the Vercel app and test signup, create a person, and create an occasion.
 
 ## Free-tier limitations
 
-- Render free services can cold start after inactivity
-- reminder cron reliability is fine for hobby use, but not guaranteed at production-grade precision
-- `ActiveJob :async` is acceptable for hobby deployment but is not a durable queue
-- SMTP/free email providers may impose low daily sending limits or stricter sender verification
-- Vercel Hobby is great for the web UI, but the backend still determines API availability and reminder delivery reliability
+- Render free web services can cold start after inactivity
+- Free Render Postgres is useful for testing, but it expires after 30 days
+- Render cron jobs are not fully free; they have a minimum monthly charge
+- `ActiveJob :async` is acceptable for hobby use but is not a durable background queue
+- free SMTP/email providers usually have sender-verification and throughput limits
+- Vercel Hobby is strong for the frontend, but backend uptime and reminder execution still depend on the Rails host
 
 ## Upgrade path later
 
-When you outgrow hobby hosting, the cleanest upgrades are:
+When you move past the hobby setup, the cleanest upgrades are:
 
-- paid Render web service or Fly.io/Railway for a more reliable Rails backend
+- paid Rails hosting on Render or another platform with stronger uptime guarantees
 - durable background job infrastructure
-- dedicated SMTP/email provider with better delivery monitoring
-- optional additional frontend origins such as preview URLs or a custom domain
+- a long-lived Postgres plan
+- automated reminder scheduling
+- a dedicated transactional email provider with monitoring
 
 ## Why this structure
 
-This keeps the web app easy to host on Vercel while the Rails API runs on a Rails-friendly platform with its own database and scheduled jobs.
+The web app is simple to host on Vercel, while the Rails API stays on a Rails-friendly platform with its own database, auth, and reminder delivery responsibilities.

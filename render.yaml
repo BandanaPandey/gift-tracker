@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: gift-tracker-api
+    runtime: ruby
+    plan: free
+    rootDir: gift-tracker-api
+    buildCommand: bundle install
+    startCommand: bundle exec rails db:prepare && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}
+    healthCheckPath: /up
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: gift-tracker-db
+          property: connectionString
+      - key: FRONTEND_APP_URL
+        sync: false
+      - key: APP_HOST
+        sync: false
+      - key: APP_PROTOCOL
+        value: https
+      - key: MAILER_FROM_EMAIL
+        sync: false
+      - key: SMTP_ADDRESS
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_AUTHENTICATION
+        value: plain
+      - key: SMTP_ENABLE_STARTTLS_AUTO
+        value: "true"
+      - key: RAILS_LOG_LEVEL
+        value: info
+
+databases:
+  - name: gift-tracker-db
+    databaseName: gift_tracker_api_production
+    plan: free
