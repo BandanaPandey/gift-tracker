@@ -80,6 +80,4 @@ test:
 #
 production:
   <<: *default
-  database: gift_tracker_api_production
-  username: gift_tracker_api
-  password: <%= ENV["GIFT_TRACKER_API_DATABASE_PASSWORD"] %>
+  url: <%= ENV["DATABASE_URL"] %>
